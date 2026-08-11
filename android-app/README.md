@@ -5,7 +5,7 @@ Native Kotlin Android implementation of the uploaded Ultra AutoDetector blueprin
 ## What is included
 
 - Kotlin + Jetpack Compose Android app.
-- Secure local demo mode for development without cloud credentials.
+- Private on-device SQLite database mode for development without cloud credentials.
 - Firebase Authentication, Firestore, and Storage repository boundary.
 - Account and license states.
 - Renewal message handoff to Telegram.
@@ -15,24 +15,33 @@ Native Kotlin Android implementation of the uploaded Ultra AutoDetector blueprin
 - Draggable floating widget with pause and stop controls.
 - Admin view with license actions and template upload/delete flow.
 
-## Local demo mode
+## Local database mode
 
-When no Firebase configuration is present, the app uses an offline local repository. This lets the UI and core flows run without an administrator password or production credentials.
+The default repository is a private SQLite database stored in the Android
+application sandbox. Users, licenses, templates, session state, and
+permission state survive app restarts without Firebase, Supabase, cloud
+credentials, or network access.
+
+This database is device-local. It does not synchronize users across devices
+and is not a replacement for a trusted production server.
 
 Demo accounts:
 
 - Regular user: any valid email plus a six-character password.
 - Administrator: `admin@local.demo` plus a six-character password.
 
+The local administrator account accepts any password with at least six
+characters. This is demo-only behavior and must not be used as production
+authentication.
+
 These are demo-only accounts and are not production credentials.
 
-## Firebase setup
+## Optional Firebase adapter
 
-1. Create a Firebase Android app for package `com.ultra.autodetector`.
-2. Place the Firebase-provided `google-services.json` at `app/google-services.json`.
-3. Add the Google Services Gradle plugin only when the file is available.
-4. Deploy and test the rules in `firebase/firestore.rules` and `firebase/storage.rules`.
-5. Provision administrator access through trusted Firebase custom claims or a protected backend. Do not put an administrator password in the app.
+`FirebaseRepository` remains available as an optional cloud adapter for a
+future server-backed build. The default `RepositoryProvider` selects
+`LocalDatabaseRepository`, so Firebase setup is not required for the current
+app.
 
 ## Build
 

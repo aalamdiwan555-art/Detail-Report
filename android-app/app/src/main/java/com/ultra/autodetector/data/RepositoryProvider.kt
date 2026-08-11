@@ -3,7 +3,12 @@ package com.ultra.autodetector.data
 import android.content.Context
 
 object RepositoryProvider {
-    fun create(context: Context): AppRepository =
-        if (FirebaseRepository.isConfigured(context)) FirebaseRepository(context)
-        else LocalDemoRepository(context)
+    /**
+     * The app currently runs on its private on-device database.
+     *
+     * FirebaseRepository remains in the project as an optional cloud adapter,
+     * but local mode is explicit and does not depend on Firebase billing,
+     * authentication setup, or network access.
+     */
+    fun create(context: Context): AppRepository = LocalDatabaseRepository(context)
 }
