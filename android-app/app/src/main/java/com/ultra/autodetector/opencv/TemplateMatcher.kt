@@ -30,7 +30,15 @@ class TemplateMatcher {
         threshold: Double = DEFAULT_THRESHOLD,
         maxCandidates: Int = MAX_CANDIDATES,
     ): MatchResult {
-        if (template.width > screen.width || template.height > screen.height) {
+        if (
+            template.width <= 0 ||
+            template.height <= 0 ||
+            screen.width <= 0 ||
+            screen.height <= 0 ||
+            template.width > screen.width ||
+            template.height > screen.height ||
+            maxCandidates <= 0
+        ) {
             return emptyResult()
         }
 
@@ -58,12 +66,14 @@ class TemplateMatcher {
         var bestX = 0
         var bestY = 0
         var candidates = 0
+        var evaluatedCandidate = false
 
         val stepX = maxOf(1, template.width / 12)
         val stepY = maxOf(1, template.height / 12)
         for (y in 0..screen.height - template.height step stepY) {
             for (x in 0..screen.width - template.width step stepX) {
                 if (++candidates > maxCandidates) break
+                evaluatedCandidate = true
                 val windowMean = windowMean(
                     pixels = screenPixels,
                     screenWidth = screen.width,
@@ -99,8 +109,8 @@ class TemplateMatcher {
         }
 
         return MatchResult(
-            found = best >= threshold,
-            confidence = best.coerceIn(-1.0, 1.0),
+            found = evaluatedCandidate && best >= threshold,
+            confidence = if (evaluatedCandidate) best.coerceIn(-1.0, 1.0) else 0.0,
             centerX = bestX + template.width / 2f,
             centerY = bestY + template.height / 2f,
             left = bestX,

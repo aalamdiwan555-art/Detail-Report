@@ -76,7 +76,10 @@ class DetectionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stopDetection()
-            ACTION_PAUSE -> paused = intent.getBooleanExtra(EXTRA_PAUSED, true)
+            ACTION_PAUSE -> {
+                paused = intent.getBooleanExtra(EXTRA_PAUSED, true)
+                isPaused = paused
+            }
             ACTION_REFRESH_TEMPLATES -> {
                 templatesLoaded = false
                 scope.launch { loadTemplates() }
@@ -127,6 +130,8 @@ class DetectionService : Service() {
             null,
         )
         wakeLock?.takeUnless { it.isHeld }?.acquire(10 * 60 * 1000L)
+        paused = false
+        isPaused = false
         detectionJob = scope.launch {
             loadTemplates()
             while (isActive) {
@@ -218,6 +223,7 @@ class DetectionService : Service() {
         templatesLoaded = false
         wakeLock?.takeIf { it.isHeld }?.release()
         isRunning = false
+        isPaused = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
         else @Suppress("DEPRECATION") stopForeground(true)
         stopSelf()
@@ -259,7 +265,10 @@ class DetectionService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 ACTION_STOP -> stopDetection()
-                ACTION_PAUSE -> paused = intent.getBooleanExtra(EXTRA_PAUSED, true)
+                ACTION_PAUSE -> {
+                    paused = intent.getBooleanExtra(EXTRA_PAUSED, true)
+                    isPaused = paused
+                }
                 ACTION_REFRESH_TEMPLATES -> {
                     templatesLoaded = false
                     scope.launch { loadTemplates() }
@@ -300,6 +309,8 @@ class DetectionService : Service() {
         private const val FRAME_INTERVAL_MS = 100L
         private const val MAX_TEMPLATES = 20
         @Volatile var isRunning: Boolean = false
+            private set
+        @Volatile var isPaused: Boolean = false
             private set
     }
 }

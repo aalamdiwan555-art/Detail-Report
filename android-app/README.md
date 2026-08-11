@@ -28,11 +28,10 @@ and is not a replacement for a trusted production server.
 Demo accounts:
 
 - Regular user: any valid email plus a six-character password.
-- Administrator: `admin@local.demo` plus a six-character password.
+- Administrator: `admin@local.demo` / `UltraAdmin!26`.
 
-The local administrator account accepts any password with at least six
-characters. This is demo-only behavior and must not be used as production
-authentication.
+The local administrator credential is fixed and development-only. It must not
+be used as production authentication.
 
 These are demo-only accounts and are not production credentials.
 

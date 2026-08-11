@@ -38,7 +38,13 @@ class LocalDatabaseRepository(context: Context) : AppRepository {
             val existing = database.findUserByEmail(normalizedEmail)
             when {
                 normalizedEmail.equals(ADMIN_EMAIL, ignoreCase = true) -> {
-                    database.findUserByEmail(ADMIN_EMAIL) ?: adminRecord()
+                    val admin = database.findUserByEmail(ADMIN_EMAIL) ?: adminRecord().also {
+                        database.saveUser(it)
+                    }
+                    require(admin.passwordHash == hashPassword(password)) {
+                        "Incorrect email or password."
+                    }
+                    admin
                 }
                 existing != null -> {
                     require(
@@ -232,7 +238,7 @@ class LocalDatabaseRepository(context: Context) : AppRepository {
     private fun adminRecord() = LocalUserRecord(
         uid = "local-admin",
         email = ADMIN_EMAIL,
-        passwordHash = "",
+        passwordHash = LocalDatabase.ADMIN_PASSWORD_HASH,
         isAdmin = true,
         status = AccountStatus.ACTIVE,
         expiresAtMillis = Long.MAX_VALUE,

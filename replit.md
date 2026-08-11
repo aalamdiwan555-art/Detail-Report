@@ -15,7 +15,7 @@ Native Android app for user-controlled screen capture, template detection, licen
 The app currently uses local database mode:
 
 - Regular account: any email and password with at least six characters creates a local active demo account when logging in; registration creates a pending account.
-- Admin demo account: `admin@local.demo` with any password of at least six characters.
+- Admin demo account: `admin@local.demo` / `UltraAdmin!26`.
 - Accounts, licenses, templates, permission state, and session state are stored in the device-local SQLite database.
 - Local mode is not production authentication and does not synchronize between devices.
 

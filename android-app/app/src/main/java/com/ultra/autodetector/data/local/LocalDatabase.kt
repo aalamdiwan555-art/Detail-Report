@@ -83,8 +83,16 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Version 1 is the initial schema. Future changes must use explicit
-        // migrations so an app upgrade does not silently delete local data.
+        if (oldVersion < 2) {
+            // Version 1 seeded a blank admin password. Replace it during
+            // upgrade so existing local installs do not retain the bypass.
+            db.update(
+                "users",
+                ContentValues().apply { put("password_hash", ADMIN_PASSWORD_HASH) },
+                "uid = ?",
+                arrayOf("local-admin"),
+            )
+        }
     }
 
     internal fun findUserByEmail(email: String): LocalUserRecord? =
@@ -273,7 +281,7 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
         val admin = ContentValues().apply {
             put("uid", "local-admin")
             put("email", "admin@local.demo")
-            put("password_hash", "")
+            put("password_hash", ADMIN_PASSWORD_HASH)
             put("is_admin", 1)
             put("status", AccountStatus.ACTIVE.name)
             put("expires_at_millis", Long.MAX_VALUE)
@@ -381,8 +389,15 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
 
     companion object {
         private const val DATABASE_NAME = "ultra_auto_detector.db"
-        private const val DATABASE_VERSION = 1
+        private const val DATABASE_VERSION = 2
         private const val DAY_MILLIS = 86_400_000L
+        /**
+         * Hash for the local demo administrator password documented in README.
+         * This account is only for local development and is not a production
+         * authentication mechanism.
+         */
+        const val ADMIN_PASSWORD_HASH =
+            "2f441b3a48a433f4931311b899bf5e9931a9e3127622c2f50a5ed0a0f209a723"
         private val USER_COLUMNS = arrayOf(
             "uid",
             "email",

@@ -123,13 +123,14 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         updatePermissions()
+        viewModel.setDetector(DetectionService.isRunning, DetectionService.isPaused)
         viewModel.refresh()
     }
 
     private fun updatePermissions() {
         val accessibility = isAccessibilityEnabled()
         val overlay = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
-        val capture = mediaProjectionData != null
+        val capture = mediaProjectionData != null || DetectionService.isRunning
         viewModel.setPermissions(PermissionState(accessibility, overlay, capture))
     }
 

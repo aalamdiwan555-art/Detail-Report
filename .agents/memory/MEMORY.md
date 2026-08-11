@@ -1,1 +1,2 @@
 - [Ultra AutoDetector blueprint](ultra-auto-detector-blueprint.md) — the uploaded Android blueprint needs security review and a dedicated Android project before implementation.
+- [Android build environment](android-build-environment.md) — APK builds require Android SDK platform 35; Java and Gradle alone are insufficient here.

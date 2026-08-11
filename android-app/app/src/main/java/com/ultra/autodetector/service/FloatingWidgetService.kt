@@ -80,21 +80,16 @@ class FloatingWidgetService : Service() {
         val pause = Button(this).apply {
             text = "Pause"
             contentDescription = "Pause detection"
+            var isPaused = false
             setOnClickListener {
+                isPaused = !isPaused
                 sendBroadcast(
                     Intent(DetectionService.ACTION_PAUSE)
                         .setPackage(packageName)
-                        .putExtra(DetectionService.EXTRA_PAUSED, true),
+                        .putExtra(DetectionService.EXTRA_PAUSED, isPaused),
                 )
-                text = "Resume"
-                setOnClickListener {
-                    sendBroadcast(
-                        Intent(DetectionService.ACTION_PAUSE)
-                            .setPackage(packageName)
-                            .putExtra(DetectionService.EXTRA_PAUSED, false),
-                    )
-                    text = "Pause"
-                }
+                text = if (isPaused) "Resume" else "Pause"
+                contentDescription = if (isPaused) "Resume detection" else "Pause detection"
             }
         }
         val stop = Button(this).apply {
