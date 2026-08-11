@@ -5,6 +5,7 @@ import android.net.Uri
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +30,7 @@ class FirebaseRepository(private val context: Context) : AppRepository {
             ?: error("Authentication failed")
         val account = loadAccount(firebaseUser.uid, firebaseUser.email.orEmpty())
         _state.value = _state.value.copy(account = account)
+        refresh()
         account
     }
 
@@ -49,6 +51,12 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         account
     }
 
+    override suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
+        require(email.isNotBlank()) { "Enter your email address first." }
+        auth.sendPasswordResetEmail(email.trim()).await()
+        _state.value = _state.value.copy(message = "If that account exists, a reset email is on its way.")
+    }
+
     override suspend fun logout() {
         auth.signOut()
         _state.value = AppState()
@@ -56,7 +64,12 @@ class FirebaseRepository(private val context: Context) : AppRepository {
 
     override suspend fun refresh() {
         val current = auth.currentUser ?: return
-        _state.value = _state.value.copy(account = loadAccount(current.uid, current.email.orEmpty()))
+        val account = loadAccount(current.uid, current.email.orEmpty())
+        _state.value = _state.value.copy(
+            account = account,
+            templates = loadTemplates(),
+        )
+        if (account.isAdmin) refreshAdminData()
     }
 
     override suspend fun setPermissionState(state: PermissionState) {
@@ -67,20 +80,70 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         _state.value = _state.value.copy(isDetectorRunning = running, isDetectorPaused = paused)
     }
 
+    override suspend fun refreshAdminData() {
+        val current = _state.value.account ?: return
+        if (!current.isAdmin) return
+        val users = firestore.collection("users").get().await().documents
+            .map { document ->
+                loadAccount(
+                    uid = document.id,
+                    fallbackEmail = document.getString("email").orEmpty(),
+                    data = document.data.orEmpty(),
+                )
+            }
+            .filterNot { it.uid == current.uid }
+        _state.value = _state.value.copy(adminUsers = users)
+    }
+
     override suspend fun grantLicense(uid: String, days: Int?) {
-        val expires = days?.let { System.currentTimeMillis() + it * 86_400_000L } ?: Long.MAX_VALUE
-        firestore.collection("users").document(uid).set(
-            mapOf("status" to "approved", "expirationTimestamp" to expires),
+        require(_state.value.account?.isAdmin == true) { "Administrator access required." }
+        val target = firestore.collection("users").document(uid).get().await()
+        val currentExpiration = (target.get("expirationTimestamp") as? Number)?.toLong() ?: 0L
+        val base = maxOf(System.currentTimeMillis(), currentExpiration)
+        val expires = days?.let { base + it * 86_400_000L } ?: Long.MAX_VALUE
+        val batch = firestore.batch()
+        batch.set(
+            firestore.collection("users").document(uid),
+            mapOf(
+                "status" to "approved",
+                "expirationTimestamp" to expires,
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ),
             SetOptions.merge(),
-        ).await()
+        )
+        batch.set(
+            firestore.collection("adminLogs").document(),
+            mapOf(
+                "action" to "grant_license",
+                "targetUid" to uid,
+                "days" to days,
+                "newExpirationTimestamp" to expires,
+                "actorUid" to auth.currentUser?.uid,
+                "createdAt" to FieldValue.serverTimestamp(),
+            ),
+        )
+        batch.commit().await()
         refresh()
     }
 
     override suspend fun rejectUser(uid: String) {
-        firestore.collection("users").document(uid).set(
-            mapOf("status" to "rejected"),
+        require(_state.value.account?.isAdmin == true) { "Administrator access required." }
+        val batch = firestore.batch()
+        batch.set(
+            firestore.collection("users").document(uid),
+            mapOf("status" to "rejected", "updatedAt" to FieldValue.serverTimestamp()),
             SetOptions.merge(),
-        ).await()
+        )
+        batch.set(
+            firestore.collection("adminLogs").document(),
+            mapOf(
+                "action" to "reject_user",
+                "targetUid" to uid,
+                "actorUid" to auth.currentUser?.uid,
+                "createdAt" to FieldValue.serverTimestamp(),
+            ),
+        )
+        batch.commit().await()
         refresh()
     }
 
@@ -89,32 +152,49 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         requireNotNull(imageUri) { "Choose an image first." }
         val id = UUID.randomUUID().toString()
         val reference = storage.reference.child("templates/$id.png")
-        reference.putFile(imageUri).await()
+        try {
+            reference.putFile(imageUri).await()
+        } catch (error: Exception) {
+            throw IllegalStateException("Template image upload failed.", error)
+        }
         val url = reference.downloadUrl.await().toString()
         val template = DetectionTemplate(id, name.trim(), description.trim(), downloadUrl = url)
-        firestore.collection("templates").document(id).set(
-            mapOf(
-                "templateId" to template.id,
-                "name" to template.name,
-                "description" to template.description,
-                "confidenceThreshold" to template.confidenceThreshold,
-                "isActive" to template.isActive,
-                "downloadUrl" to template.downloadUrl,
-            ),
-        ).await()
+        try {
+            firestore.collection("templates").document(id).set(
+                mapOf(
+                    "templateId" to template.id,
+                    "name" to template.name,
+                    "description" to template.description,
+                    "confidenceThreshold" to template.confidenceThreshold,
+                    "isActive" to template.isActive,
+                    "downloadUrl" to template.downloadUrl,
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "createdBy" to auth.currentUser?.uid,
+                ),
+            ).await()
+        } catch (error: Exception) {
+            runCatching { reference.delete().await() }
+            throw IllegalStateException("Template metadata could not be saved.", error)
+        }
         _state.value = _state.value.copy(message = "Template uploaded")
         template
     }
 
     override suspend fun deleteTemplate(templateId: String) {
+        require(_state.value.account?.isAdmin == true) { "Administrator access required." }
         firestore.collection("templates").document(templateId).delete().await()
         runCatching { storage.reference.child("templates/$templateId.png").delete().await() }
         refresh()
     }
 
-    private suspend fun loadAccount(uid: String, fallbackEmail: String): Account {
-        val snapshot = firestore.collection("users").document(uid).get().await()
-        val data = snapshot.data.orEmpty()
+    private suspend fun loadAccount(uid: String, fallbackEmail: String): Account =
+        loadAccount(
+            uid,
+            fallbackEmail,
+            firestore.collection("users").document(uid).get().await().data.orEmpty(),
+        )
+
+    private fun loadAccount(uid: String, fallbackEmail: String, data: Map<String, Any?>): Account {
         val role = data["role"] as? String
         val status = when (data["status"] as? String) {
             "approved" -> AccountStatus.ACTIVE
@@ -125,6 +205,19 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         val expires = (data["expirationTimestamp"] as? Number)?.toLong()
         return Account(uid, data["email"] as? String ?: fallbackEmail, role == "admin", status, expires)
     }
+
+    private suspend fun loadTemplates(): List<DetectionTemplate> =
+        firestore.collection("templates").get().await().documents.mapNotNull { document ->
+            val data = document.data ?: return@mapNotNull null
+            DetectionTemplate(
+                id = document.id,
+                name = data["name"] as? String ?: return@mapNotNull null,
+                description = data["description"] as? String ?: "",
+                confidenceThreshold = (data["confidenceThreshold"] as? Number)?.toFloat() ?: 0.85f,
+                isActive = data["isActive"] as? Boolean ?: true,
+                downloadUrl = data["downloadUrl"] as? String ?: "",
+            )
+        }
 
     companion object {
         fun isConfigured(context: Context): Boolean =

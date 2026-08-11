@@ -1,8 +1,21 @@
-# [Project name]
+# Ultra AutoDetector
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Native Android app for user-controlled screen capture, template detection, licensed access, and explicit gesture controls.
 
 ## Run & Operate
+
+### Android app
+
+- Open `android-app/` in Android Studio with Android SDK platform 35.
+- Add Firebase's `google-services.json` at `android-app/app/google-services.json` only for a configured Firebase project.
+- Build with `./gradlew assembleDebug` from `android-app/`.
+- Replit can validate Gradle configuration, but this container does not include the Android SDK, so APK compilation must run on an Android development machine.
+
+When Firebase is not configured, the app automatically uses local demo mode:
+
+- Regular account: any email and password with at least six characters. It starts as pending.
+- Admin demo account: `admin@local.demo` with any password of at least six characters.
+- Demo data is local-only and is not production authentication.
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
@@ -13,6 +26,10 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Stack
 
+- Android: Kotlin, Jetpack Compose, Android API 26–35
+- Cloud boundary: Firebase Authentication, Firestore, and Storage
+- Services: MediaProjection foreground capture, explicit AccessibilityService gestures, overlay controls
+
 - pnpm workspaces, Node.js 24, TypeScript 5.9
 - API: Express 5
 - DB: PostgreSQL + Drizzle ORM
@@ -22,23 +39,34 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `android-app/app/src/main/java/com/ultra/autodetector/ui/` — Compose screens and state
+- `android-app/app/src/main/java/com/ultra/autodetector/data/` — local demo and Firebase repository boundaries
+- `android-app/app/src/main/java/com/ultra/autodetector/service/` — capture, gesture, and floating-widget services
+- `android-app/app/src/main/java/com/ultra/autodetector/data/Models.kt` — account, license, template, and permission state
+- `firebase/firestore.rules` and `firebase/storage.rules` — server-side access controls
+- `docs/ultra-auto-detector-blueprint-report.md` — security and platform review of the uploaded blueprint
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Firebase admin authorization is represented by trusted token claims in rules; the client never contains an administrator password.
+- Local demo mode keeps the UI usable without cloud credentials and uses separate demo identities.
+- Screen capture and overlay services start only after explicit user actions and permissions.
+- MediaProjection authorization is held in memory for the current session instead of being serialized as a reusable token.
+- License renewals extend from the later of the current expiration and now; admin actions are written to an immutable audit collection.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Users can sign in or create a pending account, review license status, grant device permissions, start/pause/stop screen detection, and request renewal through Telegram. Trusted administrators can approve/reject users and manage image templates.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Preserve the native Kotlin Android architecture and avoid migrating the project to another stack.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- A Firebase Android configuration is optional for local demo mode but required for cloud accounts and template storage.
+- Before release, deploy and test both Firebase rules files with authenticated, unauthenticated, regular-user, and admin cases.
+- Android SDK platform 35 is required to compile the app; Replit's current container does not provide it.
 
 ## Pointers
 

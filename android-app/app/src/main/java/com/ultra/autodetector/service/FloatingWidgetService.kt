@@ -13,6 +13,11 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
+import android.content.pm.ServiceInfo
+import com.ultra.autodetector.UltraAutoDetectorApp
+import com.ultra.autodetector.R
 
 class FloatingWidgetService : Service() {
     private lateinit var windowManager: WindowManager
@@ -33,6 +38,29 @@ class FloatingWidgetService : Service() {
             removeWidget()
             stopSelf()
         } else if (root == null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    NotificationCompat.Builder(this, UltraAutoDetectorApp.CHANNEL_ID)
+                        .setSmallIcon(android.R.drawable.ic_menu_view)
+                        .setContentTitle(getString(R.string.detection_notification_title))
+                        .setContentText("Floating controls are available while detection is active.")
+                        .setOngoing(true)
+                        .build(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            } else {
+                startForeground(
+                    NOTIFICATION_ID,
+                    NotificationCompat.Builder(this, UltraAutoDetectorApp.CHANNEL_ID)
+                        .setSmallIcon(android.R.drawable.ic_menu_view)
+                        .setContentTitle(getString(R.string.detection_notification_title))
+                        .setContentText("Floating controls are available while detection is active.")
+                        .setOngoing(true)
+                        .build(),
+                )
+            }
             createWidget()
         }
         return START_NOT_STICKY
@@ -120,10 +148,13 @@ class FloatingWidgetService : Service() {
 
     override fun onDestroy() {
         removeWidget()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
+        else @Suppress("DEPRECATION") stopForeground(true)
         super.onDestroy()
     }
 
     companion object {
         const val ACTION_HIDE = "com.ultra.autodetector.action.HIDE_WIDGET"
+        private const val NOTIFICATION_ID = 102
     }
 }

@@ -17,6 +17,8 @@ import android.os.PowerManager
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
+import android.content.pm.ServiceInfo
 import com.ultra.autodetector.UltraAutoDetectorApp
 import com.ultra.autodetector.R
 import com.ultra.autodetector.ui.MainActivity
@@ -44,6 +46,7 @@ class DetectionService : Service() {
     private var imageReader: ImageReader? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var paused = false
+    private var stopping = false
     private var frameAnalyzer: FrameAnalyzer = FrameAnalyzer()
 
     override fun onCreate() {
@@ -76,7 +79,16 @@ class DetectionService : Service() {
 
     private fun startDetection(resultCode: Int, data: Intent) {
         if (mediaProjection != null) return
-        startForeground(NOTIFICATION_ID, notification())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                notification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification())
+        }
         val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjection = manager.getMediaProjection(resultCode, data)
         val metrics = resources.displayMetrics
@@ -111,6 +123,8 @@ class DetectionService : Service() {
     }
 
     private fun stopDetection() {
+        if (stopping) return
+        stopping = true
         detectionJob?.cancel()
         detectionJob = null
         imageReader?.close()
@@ -124,6 +138,7 @@ class DetectionService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
         else @Suppress("DEPRECATION") stopForeground(true)
         stopSelf()
+        stopping = false
     }
 
     private fun notification(): Notification {
@@ -168,7 +183,7 @@ class DetectionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        stopDetection()
+        if (!stopping) stopDetection()
         runCatching { unregisterReceiver(controlReceiver) }
         scope.cancel()
         super.onDestroy()

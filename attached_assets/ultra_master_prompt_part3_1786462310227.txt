@@ -1,0 +1,630 @@
+# 🚀 ULTRA MASTER BLUEPRINT PROMPT - PART 3 OF 8
+## AndroidManifest.xml, Gradle Config, Accessibility Service Config, Colors & Strings
+
+---
+
+### 3.6 Dialog: Renew Account via Telegram (res/layout/dialog_renew_account.xml)
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@color/card_background">
+
+    <ImageView
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_telegram"
+        app:tint="@color/telegram_blue" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="16dp"
+        android:text="Renew Your Account"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="8dp"
+        android:text="Click below to message the admin on Telegram with your account details pre-filled."
+        android:textSize="14sp"
+        android:textColor="@color/text_secondary"
+        android:gravity="center" />
+
+    <!-- User Info Preview Card -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        app:cardCornerRadius="8dp"
+        app:cardBackgroundColor="@color/background_dark">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:id="@+id/tvDialogEmail"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="user@example.com"
+                android:textSize="13sp"
+                android:textColor="@color/text_secondary"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/tvDialogStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Status: Expired"
+                android:textSize="13sp"
+                android:textColor="@color/status_expired"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnOpenTelegram"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="20dp"
+        android:text="Open Telegram"
+        android:textSize="16sp"
+        android:textAllCaps="false"
+        android:textColor="@color/white"
+        app:icon="@drawable/ic_telegram"
+        app:iconTint="@color/white"
+        app:backgroundTint="@color/telegram_blue"
+        app:cornerRadius="12dp" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnCancelDialog"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="8dp"
+        android:text="Cancel"
+        android:textSize="14sp"
+        android:textAllCaps="false"
+        android:textColor="@color/text_secondary"
+        app:backgroundTint="@android:color/transparent" />
+</LinearLayout>
+```
+
+---
+
+## 📱 SECTION 4: ANDROID MANIFEST & CONFIGURATION
+
+### 4.1 AndroidManifest.xml
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- PERMISSIONS -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <!-- Internet & Network -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- Foreground Service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+    <!-- Screen Capture -->
+    <uses-permission android:name="android.permission.MEDIA_PROJECTION" />
+
+    <!-- Accessibility Service -->
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
+
+    <!-- Draw Over Apps (Floating Widget) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Wake Lock (Keep detection running) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Storage (for template caching) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="29" />
+
+    <!-- Post Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- APPLICATION DECLARATION -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <application
+        android:name=".UltraAutoDetectorApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.UltraAutoDetector"
+        android:usesCleartextTraffic="false"
+        tools:targetApi="34">
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- ACTIVITIES -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+
+        <!-- Authentication Activity (Launcher) -->
+        <activity
+            android:name=".ui.auth.AuthActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Main Dashboard Activity -->
+        <activity
+            android:name=".ui.main.MainActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:launchMode="singleTask" />
+
+        <!-- Admin Control Panel Activity -->
+        <activity
+            android:name=".ui.admin.AdminActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:label="Admin Panel" />
+
+        <!-- Media Projection Permission Activity -->
+        <activity
+            android:name=".service.MediaProjectionPermissionActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- SERVICES -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+
+        <!-- Detection Service (Foreground Service for Screen Capture) -->
+        <service
+            android:name=".service.DetectionService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"
+            android:permission="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+        <!-- Auto-Click Accessibility Service -->
+        <service
+            android:name=".service.AutoClickService"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Floating Widget Service -->
+        <service
+            android:name=".service.FloatingWidgetService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_widget_control" />
+        </service>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- PROVIDERS -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+</manifest>
+```
+
+### 4.2 Accessibility Service Config (res/xml/accessibility_service_config.xml)
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/accessibility_service_description"
+    android:packageNames="com.ultra.autodetector"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true"
+    android:settingsActivity="com.ultra.autodetector.ui.main.MainActivity"
+    android:notificationTimeout="0" />
+```
+
+### 4.3 File Provider Paths (res/xml/file_paths.xml)
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-files-path
+        name="templates"
+        path="templates/" />
+    <cache-path
+        name="cache"
+        path="." />
+    <files-path
+        name="files"
+        path="." />
+</paths>
+```
+
+---
+
+## 🔧 SECTION 5: GRADLE CONFIGURATION
+
+### 5.1 Project-Level build.gradle.kts
+
+```kotlin
+// Top-level build file
+plugins {
+    id("com.android.application") version "8.2.0" apply false
+    id("org.jetbrains.kotlin.android") version "1.9.20" apply false
+    id("com.google.gms.google-services") version "4.4.0" apply false
+    id("com.google.devtools.ksp") version "1.9.20-1.0.14" apply false
+}
+```
+
+### 5.2 App-Level build.gradle.kts
+
+```kotlin
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services")
+    id("com.google.devtools.ksp")
+    id("kotlin-kapt")
+}
+
+android {
+    namespace = "com.ultra.autodetector"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.ultra.autodetector"
+        minSdk = 26
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        vectorDrawables {
+            useSupportLibrary = true
+        }
+
+        // OpenCV ABI filters
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // Obfuscate admin credentials in release
+            buildConfigField("String", "ADMIN_EMAIL", ""${System.getenv("ADMIN_EMAIL") ?: "diwanatik84@gmail.com"}"")
+            buildConfigField("String", "TELEGRAM_ADMIN", ""@dminofclicker"")
+        }
+        debug {
+            isMinifyEnabled = false
+            buildConfigField("String", "ADMIN_EMAIL", ""diwanatik84@gmail.com"")
+            buildConfigField("String", "TELEGRAM_ADMIN", ""@dminofclicker"")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    buildFeatures {
+        viewBinding = true
+        buildConfig = true
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+dependencies {
+    // ═══════════════════════════════════════════════════════
+    // ANDROID CORE
+    // ═══════════════════════════════════════════════════════
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("com.google.android.material:material:1.11.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.coordinatorlayout:coordinatorlayout:1.2.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.cardview:cardview:1.0.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
+    implementation("androidx.activity:activity-ktx:1.8.2")
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
+
+    // ═══════════════════════════════════════════════════════
+    // KOTLIN COROUTINES
+    // ═══════════════════════════════════════════════════════
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+
+    // ═══════════════════════════════════════════════════════
+    // FIREBASE
+    // ═══════════════════════════════════════════════════════
+    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-storage-ktx")
+    implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("com.google.firebase:firebase-crashlytics-ktx")
+
+    // ═══════════════════════════════════════════════════════
+    // SECURITY
+    // ═══════════════════════════════════════════════════════
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // ═══════════════════════════════════════════════════════
+    // OPENCV
+    // ═══════════════════════════════════════════════════════
+    // Option A: OpenCV Android SDK (manual import)
+    // implementation(project(":opencv"))
+    // Option B: OpenCV via Maven (if available)
+    // implementation("org.opencv:opencv-android:4.8.1")
+    // Option C: OpenCV contrib (for extra features)
+    // implementation("com.quickbirdstudios:opencv:4.5.3.0")
+
+    // ═══════════════════════════════════════════════════════
+    // IMAGE LOADING & PROCESSING
+    // ═══════════════════════════════════════════════════════
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+    kapt("com.github.bumptech.glide:compiler:4.16.0")
+
+    // ═══════════════════════════════════════════════════════
+    // UTILITIES
+    // ═══════════════════════════════════════════════════════
+    implementation("com.jakewharton.timber:timber:5.0.1")
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    // ═══════════════════════════════════════════════════════
+    // TESTING
+    // ═══════════════════════════════════════════════════════
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+}
+```
+
+---
+
+## 🎨 SECTION 6: RESOURCES (Colors, Strings, Themes)
+
+### 6.1 Colors (res/values/colors.xml)
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Background Colors -->
+    <color name="background_dark">#FF121212</color>
+    <color name="background_surface">#FF1E1E1E</color>
+    <color name="card_background">#FF252525</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#FFB0B0B0</color>
+    <color name="text_hint">#FF808080</color>
+
+    <!-- Primary Accent -->
+    <color name="primary_accent">#FF00E5FF</color>
+    <color name="primary_accent_dark">#FF00B8D4</color>
+    <color name="primary_accent_light">#FF80EAFF</color>
+
+    <!-- Status Colors -->
+    <color name="status_pending">#FFFFA726</color>
+    <color name="status_approved">#FF66BB6A</color>
+    <color name="status_rejected">#FFEF5350</color>
+    <color name="status_expired">#FFAB47BC</color>
+    <color name="status_admin">#FF7C4DFF</color>
+
+    <!-- Button Colors -->
+    <color name="button_primary">#FF00E5FF</color>
+    <color name="button_secondary">#FF424242</color>
+    <color name="button_success">#FF43A047</color>
+    <color name="button_danger">#FFE53935</color>
+
+    <!-- Telegram Brand Color -->
+    <color name="telegram_blue">#FF0088CC</color>
+    <color name="telegram_blue_dark">#FF006699</color>
+
+    <!-- Admin Color -->
+    <color name="admin_purple">#FF7C4DFF</color>
+
+    <!-- Utility Colors -->
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="divider">#FF333333</color>
+    <color name="transparent">#00000000</color>
+</resources>
+```
+
+### 6.2 Strings (res/values/strings.xml)
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ultra AutoDetector</string>
+    <string name="app_logo">App Logo</string>
+
+    <!-- Auth Screen -->
+    <string name="hint_email">Email Address</string>
+    <string name="hint_password">Password</string>
+    <string name="btn_login">Login</string>
+    <string name="btn_register">Create Account</string>
+    <string name="btn_renew_telegram">Renew Account via Telegram</string>
+    <string name="status_pending">Pending Approval</string>
+    <string name="status_approved">Active</string>
+    <string name="status_rejected">Rejected</string>
+    <string name="status_expired">Expired</string>
+    <string name="msg_pending">Your account is awaiting admin approval.</string>
+    <string name="msg_rejected">Your account has been rejected by admin.</string>
+    <string name="msg_expired">Your subscription has expired. Please renew.</string>
+
+    <!-- Main Screen -->
+    <string name="subscription_status">Subscription Status</string>
+    <string name="remaining_time">Remaining Time</string>
+    <string name="required_permissions">Required Permissions</string>
+    <string name="permission_accessibility">Accessibility Service</string>
+    <string name="permission_overlay">Draw Over Apps</string>
+    <string name="permission_media_projection">Screen Recording</string>
+    <string name="btn_grant">Grant</string>
+    <string name="detector_ready">Detector Ready</string>
+    <string name="detector_running">Detector Running</string>
+    <string name="btn_start_detector">START DETECTOR</string>
+    <string name="btn_stop_detector">STOP DETECTOR</string>
+    <string name="admin_panel">Admin Panel</string>
+    <string name="logout">Logout</string>
+
+    <!-- Admin Screen -->
+    <string name="admin_title">Admin Control Panel</string>
+    <string name="user_management">User License Management</string>
+    <string name="user_management_subtitle">Manage user approvals and license durations</string>
+    <string name="template_manager">Template Cloud Manager</string>
+    <string name="template_manager_subtitle">Upload and manage detection templates</string>
+    <string name="btn_upload_template">Upload New Template</string>
+    <string name="btn_1_day">1 Day</string>
+    <string name="btn_2_days">2 Days</string>
+    <string name="btn_3_days">3 Days</string>
+    <string name="btn_lifetime">Lifetime</string>
+    <string name="btn_reject">Reject</string>
+
+    <!-- Telegram Feature -->
+    <string name="telegram_admin_username">@dminofclicker</string>
+    <string name="telegram_message_template">Hello Admin, I want to renew my Ultra AutoDetector account.\n\nEmail: %1$s\nStatus: %2$s\nUID: %3$s\n\nPlease renew my account.</string>
+    <string name="renew_dialog_title">Renew Your Account</string>
+    <string name="renew_dialog_message">Click below to message the admin on Telegram with your account details pre-filled.</string>
+    <string name="open_telegram">Open Telegram</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- Accessibility Service -->
+    <string name="accessibility_service_description">Ultra AutoDetector Accessibility Service enables humanized auto-clicking on detected screen elements. This service is required for the app to perform touch gestures.</string>
+    <string name="accessibility_service_label">Ultra AutoDetector Click Service</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_id">detection_service_channel</string>
+    <string name="notification_channel_name">Detection Service</string>
+    <string name="notification_channel_desc">Shows when screen detection is active</string>
+    <string name="notification_title">Ultra AutoDetector Running</string>
+    <string name="notification_text">Screen detection is active. Tap to open app.</string>
+
+    <!-- Errors -->
+    <string name="error_auth_failed">Authentication failed. Please check your credentials.</string>
+    <string name="error_network">Network error. Please check your connection.</string>
+    <string name="error_permission_denied">Permission denied. The app cannot function without this permission.</string>
+    <string name="error_license_expired">Your license has expired. Please renew via Telegram.</string>
+    <string name="error_not_approved">Your account is pending approval. Contact admin.</string>
+    <string name="error_rejected">Your account has been rejected by admin.</string>
+    <string name="error_admin_only">Access denied. Admin privileges required.</string>
+
+    <!-- Time Constants -->
+    <string name="time_not_set">Not Set</string>
+    <string name="time_lifetime">Lifetime</string>
+    <string name="time_expired">Expired</string>
+</resources>
+```
+
+### 6.3 Themes (res/values/themes.xml)
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.UltraAutoDetector" parent="Theme.Material3.Dark.NoActionBar">
+        <!-- Primary Colors -->
+        <item name="colorPrimary">@color/primary_accent</item>
+        <item name="colorPrimaryDark">@color/primary_accent_dark</item>
+        <item name="colorAccent">@color/primary_accent</item>
+
+        <!-- Background -->
+        <item name="android:colorBackground">@color/background_dark</item>
+        <item name="colorSurface">@color/background_surface</item>
+
+        <!-- Status Bar -->
+        <item name="android:statusBarColor">@color/background_dark</item>
+        <item name="android:navigationBarColor">@color/background_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <!-- Text -->
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+
+        <!-- Typography -->
+        <item name="textAppearanceHeadlineLarge">@style/TextAppearance.Ultra.Headline</item>
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.Ultra.Body</item>
+    </style>
+
+    <style name="TextAppearance.Ultra.Headline" parent="TextAppearance.Material3.HeadlineLarge">
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TextAppearance.Ultra.Body" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+</resources>
+```
+
+---
+
+**END OF PART 3**

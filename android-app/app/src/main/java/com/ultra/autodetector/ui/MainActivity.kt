@@ -191,6 +191,8 @@ private fun UltraApp(viewModel: MainViewModel, activity: MainActivity) {
             state.account == null -> AuthScreen(
                 onLogin = viewModel::login,
                 onRegister = viewModel::register,
+                onResetPassword = viewModel::sendPasswordReset,
+                message = state.message,
             )
             showAdmin && state.account?.isAdmin == true -> AdminScreen(
                 state = state,
@@ -199,6 +201,7 @@ private fun UltraApp(viewModel: MainViewModel, activity: MainActivity) {
                 onReject = viewModel::rejectUser,
                 onUpload = viewModel::uploadTemplate,
                 onDeleteTemplate = viewModel::deleteTemplate,
+                onRefresh = viewModel::refreshAdminData,
             )
             showSettings -> SettingsScreen(
                 onBack = { showSettings = false },
@@ -225,6 +228,8 @@ private fun UltraApp(viewModel: MainViewModel, activity: MainActivity) {
 private fun AuthScreen(
     onLogin: (String, String) -> Unit,
     onRegister: (String, String) -> Unit,
+    onResetPassword: (String) -> Unit,
+    message: String?,
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -270,6 +275,13 @@ private fun AuthScreen(
                     color = Teal,
                 )
             }
+            TextButton(
+                onClick = { onResetPassword(email) },
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            ) {
+                Text("Forgot password?", color = Muted, fontSize = 13.sp)
+            }
+            message?.let { Text(it, color = Teal, fontSize = 13.sp) }
             Text(
                 "Local demo mode is available until Firebase is configured.",
                 color = Muted,
@@ -536,6 +548,7 @@ private fun AdminScreen(
     onReject: (Account) -> Unit,
     onUpload: (String, String, Uri?) -> Unit,
     onDeleteTemplate: (String) -> Unit,
+    onRefresh: () -> Unit,
 ) {
     var templateName by remember { mutableStateOf("") }
     var templateDescription by remember { mutableStateOf("") }
@@ -544,6 +557,7 @@ private fun AdminScreen(
         templateName = ""
         templateDescription = ""
     }
+    LaunchedEffect(Unit) { onRefresh() }
     Scaffold(
         containerColor = Ink,
         topBar = {
@@ -563,11 +577,19 @@ private fun AdminScreen(
                 Text("Approve or reject user accounts. In production, these operations are enforced by Firebase rules and trusted authorization.", color = Muted, fontSize = 13.sp)
             }
             item {
-                AdminUserCard(
-                    account = state.account ?: return@item,
-                    onGrant = onGrant,
-                    onReject = onReject,
-                )
+                if (state.adminUsers.isEmpty()) {
+                    Text("No user accounts are waiting for action.", color = Muted, fontSize = 13.sp)
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        state.adminUsers.forEach { account ->
+                            AdminUserCard(
+                                account = account,
+                                onGrant = onGrant,
+                                onReject = onReject,
+                            )
+                        }
+                    }
+                }
             }
             item {
                 Text("Template cloud", color = Teal, fontWeight = FontWeight.Bold)
@@ -610,7 +632,7 @@ private fun AdminUserCard(account: Account, onGrant: (Account, Int?) -> Unit, on
             Text(account.email, color = Color.White, fontWeight = FontWeight.Bold)
             Text("Current: ${account.status} · ${account.remainingLabel()}", color = Muted, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(1, 3, 30).forEach { days ->
+                listOf(1, 2, 3).forEach { days ->
                     OutlinedButton(onClick = { onGrant(account, days) }) { Text("${days}d", color = Teal) }
                 }
                 OutlinedButton(onClick = { onGrant(account, null) }) { Text("Life", color = Teal) }

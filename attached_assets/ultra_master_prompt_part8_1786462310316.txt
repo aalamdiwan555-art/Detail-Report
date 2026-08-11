@@ -1,0 +1,903 @@
+# 🚀 ULTRA MASTER BLUEPRINT PROMPT - PART 8 OF 8
+## UI Activities: AuthActivity, MainActivity, AdminActivity + Adapters
+
+---
+
+## 🎨 SECTION 12: UI ACTIVITIES
+
+### 12.1 Auth Activity (ui/auth/AuthActivity.kt)
+
+```kotlin
+package com.ultra.autodetector.ui.auth
+
+import android.content.Intent
+import android.os.Bundle
+import android.provider.Settings
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
+import com.ultra.autodetector.data.firebase.FirebaseAuthManager
+import com.ultra.autodetector.data.firebase.FirestoreManager
+import com.ultra.autodetector.data.local.EncryptedPrefsManager
+import com.ultra.autodetector.data.model.User
+import com.ultra.autodetector.databinding.ActivityAuthBinding
+import com.ultra.autodetector.ui.admin.AdminActivity
+import com.ultra.autodetector.ui.main.MainActivity
+import com.ultra.autodetector.util.Constants
+import com.ultra.autodetector.util.TelegramHelper
+import com.ultra.autodetector.util.gone
+import com.ultra.autodetector.util.showToast
+import com.ultra.autodetector.util.visible
+import kotlinx.coroutines.launch
+
+/**
+ * Authentication screen with login, registration, and account status display.
+ * Features:
+ * - Email/password login
+ * - New user registration (auto-creates Firestore document with "pending" status)
+ * - Real-time account status display (Pending/Approved/Rejected/Expired)
+ * - Telegram renewal button for non-active accounts
+ * - Admin auto-override for diwanatik84@gmail.com
+ */
+class AuthActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityAuthBinding
+    private val authManager = FirebaseAuthManager()
+    private val firestoreManager = FirestoreManager()
+    private lateinit var encryptedPrefs: EncryptedPrefsManager
+
+    private var currentUser: User? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityAuthBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        encryptedPrefs = EncryptedPrefsManager.getInstance(this)
+
+        // Check if already logged in
+        if (authManager.isLoggedIn) {
+            authManager.currentUser?.let { firebaseUser ->
+                lifecycleScope.launch {
+                    val user = firestoreManager.getUser(firebaseUser.uid)
+                    user?.let { handleLoginSuccess(it) }
+                }
+            }
+            return
+        }
+
+        setupClickListeners()
+    }
+
+    private fun setupClickListeners() {
+        // Login button
+        binding.btnLogin.setOnClickListener {
+            val email = binding.etEmail.text.toString().trim()
+            val password = binding.etPassword.text.toString().trim()
+
+            if (validateInputs(email, password)) {
+                performLogin(email, password)
+            }
+        }
+
+        // Register button
+        binding.btnRegister.setOnClickListener {
+            val email = binding.etEmail.text.toString().trim()
+            val password = binding.etPassword.text.toString().trim()
+
+            if (validateInputs(email, password)) {
+                performRegistration(email, password)
+            }
+        }
+
+        // Telegram renewal button (in status card)
+        binding.btnContactAdminTelegram.setOnClickListener {
+            currentUser?.let { user ->
+                TelegramHelper.openTelegramWithRenewalMessage(
+                    this,
+                    user.email,
+                    user.status,
+                    user.uid,
+                    TelegramHelper.getDeviceInfo()
+                )
+            }
+        }
+    }
+
+    private fun validateInputs(email: String, password: String): Boolean {
+        if (email.isEmpty()) {
+            binding.tilEmail.error = "Email is required"
+            return false
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            binding.tilEmail.error = "Invalid email format"
+            return false
+        }
+        binding.tilEmail.error = null
+
+        if (password.isEmpty()) {
+            binding.tilPassword.error = "Password is required"
+            return false
+        }
+        if (password.length < 6) {
+            binding.tilPassword.error = "Password must be at least 6 characters"
+            return false
+        }
+        binding.tilPassword.error = null
+
+        return true
+    }
+
+    private fun performLogin(email: String, password: String) {
+        showLoading(true)
+
+        lifecycleScope.launch {
+            val result = authManager.login(email, password)
+            showLoading(false)
+
+            result.onSuccess { user ->
+                handleLoginSuccess(user)
+            }.onFailure { error ->
+                showToast("Login failed: ${error.message}")
+            }
+        }
+    }
+
+    private fun performRegistration(email: String, password: String) {
+        showLoading(true)
+
+        lifecycleScope.launch {
+            val deviceInfo = TelegramHelper.getDeviceInfo()
+            val result = authManager.register(email, password, deviceInfo)
+            showLoading(false)
+
+            result.onSuccess { user ->
+                currentUser = user
+                showStatusCard(user)
+                showToast("Registration successful! Account pending approval.")
+            }.onFailure { error ->
+                showToast("Registration failed: ${error.message}")
+            }
+        }
+    }
+
+    private fun handleLoginSuccess(user: User) {
+        currentUser = user
+
+        when {
+            // Admin user - go directly to MainActivity
+            user.email == Constants.ADMIN_EMAIL || user.role == Constants.ROLE_ADMIN -> {
+                startActivity(Intent(this, MainActivity::class.java))
+                finish()
+            }
+            // Approved and active - go to MainActivity
+            user.status == Constants.STATUS_APPROVED && user.isLicenseActive() -> {
+                startActivity(Intent(this, MainActivity::class.java))
+                finish()
+            }
+            // Pending, Rejected, or Expired - show status card with Telegram button
+            else -> {
+                showStatusCard(user)
+                showToast("Account ${user.status}. Please renew via Telegram.")
+            }
+        }
+    }
+
+    private fun showStatusCard(user: User) {
+        binding.cardStatus.visible()
+
+        when (user.status) {
+            Constants.STATUS_PENDING -> {
+                binding.tvStatusLabel.text = "Pending Approval"
+                binding.tvStatusLabel.setTextColor(getColor(R.color.status_pending))
+                binding.tvStatusMessage.text = "Your account is awaiting admin approval."
+                binding.tvExpirationTime.text = "Expires: Not Set"
+                binding.btnContactAdminTelegram.visible()
+            }
+            Constants.STATUS_REJECTED -> {
+                binding.tvStatusLabel.text = "Rejected"
+                binding.tvStatusLabel.setTextColor(getColor(R.color.status_rejected))
+                binding.tvStatusMessage.text = "Your account has been rejected by admin."
+                binding.tvExpirationTime.text = "Expires: N/A"
+                binding.btnContactAdminTelegram.visible()
+            }
+            Constants.STATUS_EXPIRED -> {
+                binding.tvStatusLabel.text = "Expired"
+                binding.tvStatusLabel.setTextColor(getColor(R.color.status_expired))
+                binding.tvStatusMessage.text = "Your subscription has expired."
+                binding.tvExpirationTime.text = "Expired on: ${user.expirationTimestamp?.let { 
+                    java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) 
+                } ?: "Unknown"}"
+                binding.btnContactAdminTelegram.visible()
+            }
+            Constants.STATUS_APPROVED -> {
+                if (!user.isLicenseActive()) {
+                    binding.tvStatusLabel.text = "Expired"
+                    binding.tvStatusLabel.setTextColor(getColor(R.color.status_expired))
+                    binding.tvStatusMessage.text = "Your subscription has expired."
+                    binding.tvExpirationTime.text = "Expired"
+                    binding.btnContactAdminTelegram.visible()
+                }
+            }
+        }
+    }
+
+    private fun showLoading(show: Boolean) {
+        binding.progressBar.visibility = if (show) View.VISIBLE else View.GONE
+        binding.btnLogin.isEnabled = !show
+        binding.btnRegister.isEnabled = !show
+    }
+}
+```
+
+### 12.2 Main Activity (ui/main/MainActivity.kt)
+
+```kotlin
+package com.ultra.autodetector.ui.main
+
+import android.content.Context
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
+import com.ultra.autodetector.R
+import com.ultra.autodetector.data.firebase.FirestoreManager
+import com.ultra.autodetector.data.local.EncryptedPrefsManager
+import com.ultra.autodetector.data.model.User
+import com.ultra.autodetector.databinding.ActivityMainBinding
+import com.ultra.autodetector.service.DetectionService
+import com.ultra.autodetector.service.FloatingWidgetService
+import com.ultra.autodetector.ui.admin.AdminActivity
+import com.ultra.autodetector.ui.auth.AuthActivity
+import com.ultra.autodetector.util.Constants
+import com.ultra.autodetector.util.TelegramHelper
+import com.ultra.autodetector.util.gone
+import com.ultra.autodetector.util.showToast
+import com.ultra.autodetector.util.visible
+import kotlinx.coroutines.launch
+
+/**
+ * Main dashboard screen showing:
+ * - Subscription status banner
+ * - Permission status (Accessibility, Overlay, MediaProjection)
+ * - Start/Stop detector button
+ * - Telegram renewal button (shown when expired/pending)
+ * - Admin panel button (shown for admin only)
+ */
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityMainBinding
+    private lateinit var encryptedPrefs: EncryptedPrefsManager
+    private val firestoreManager = FirestoreManager()
+
+    private var currentUser: User? = null
+    private var isDetectorRunning = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        encryptedPrefs = EncryptedPrefsManager.getInstance(this)
+
+        // Check auth
+        val firebaseUser = Firebase.auth.currentUser
+        if (firebaseUser == null) {
+            startActivity(Intent(this, AuthActivity::class.java))
+            finish()
+            return
+        }
+
+        setupUI()
+        loadUserData(firebaseUser.uid)
+    }
+
+    private fun setupUI() {
+        // Permission grant buttons
+        binding.btnGrantAccessibility.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+
+        binding.btnGrantOverlay.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, 
+                Uri.parse("package:$packageName")))
+        }
+
+        binding.btnGrantMediaProjection.setOnClickListener {
+            requestMediaProjection()
+        }
+
+        // Detector toggle button
+        binding.btnToggleDetector.setOnClickListener {
+            toggleDetector()
+        }
+
+        // Telegram renewal button
+        binding.btnRenewViaTelegram.setOnClickListener {
+            currentUser?.let { user ->
+                TelegramHelper.openTelegramWithRenewalMessage(
+                    this,
+                    user.email,
+                    user.status,
+                    user.uid,
+                    TelegramHelper.getDeviceInfo()
+                )
+            }
+        }
+
+        // Admin panel button
+        binding.btnAdminPanel.setOnClickListener {
+            startActivity(Intent(this, AdminActivity::class.java))
+        }
+
+        // Logout button
+        binding.btnLogout.setOnClickListener {
+            Firebase.auth.signOut()
+            encryptedPrefs.clearAll()
+            startActivity(Intent(this, AuthActivity::class.java))
+            finish()
+        }
+    }
+
+    private fun loadUserData(uid: String) {
+        lifecycleScope.launch {
+            val user = firestoreManager.getUser(uid)
+            user?.let {
+                currentUser = it
+                updateUI(it)
+            }
+        }
+    }
+
+    private fun updateUI(user: User) {
+        // Update subscription status
+        when {
+            user.role == Constants.ROLE_ADMIN -> {
+                binding.tvSubscriptionStatus.text = "Admin"
+                binding.tvSubscriptionStatus.setTextColor(getColor(R.color.status_admin))
+                binding.tvRemainingTime.text = "Lifetime Access"
+                binding.ivStatusIndicator.setImageResource(R.drawable.bg_status_approved)
+                binding.btnAdminPanel.visible()
+            }
+            user.status == Constants.STATUS_APPROVED && user.isLicenseActive() -> {
+                binding.tvSubscriptionStatus.text = "Active"
+                binding.tvSubscriptionStatus.setTextColor(getColor(R.color.status_approved))
+                binding.tvRemainingTime.text = user.getRemainingTimeText()
+                binding.ivStatusIndicator.setImageResource(R.drawable.bg_status_approved)
+            }
+            user.status == Constants.STATUS_PENDING -> {
+                binding.tvSubscriptionStatus.text = "Pending"
+                binding.tvSubscriptionStatus.setTextColor(getColor(R.color.status_pending))
+                binding.tvRemainingTime.text = "Awaiting approval"
+                binding.ivStatusIndicator.setImageResource(R.drawable.bg_status_pending)
+                binding.tvErrorMessage.text = "Account pending approval. Contact admin via Telegram."
+                binding.tvErrorMessage.visible()
+                binding.btnRenewViaTelegram.visible()
+                binding.btnToggleDetector.isEnabled = false
+                binding.btnToggleDetector.text = "DETECTOR LOCKED"
+            }
+            user.status == Constants.STATUS_REJECTED -> {
+                binding.tvSubscriptionStatus.text = "Rejected"
+                binding.tvSubscriptionStatus.setTextColor(getColor(R.color.status_rejected))
+                binding.tvRemainingTime.text = "Account rejected"
+                binding.ivStatusIndicator.setImageResource(R.drawable.bg_status_rejected)
+                binding.tvErrorMessage.text = "Account rejected. Contact admin via Telegram."
+                binding.tvErrorMessage.visible()
+                binding.btnRenewViaTelegram.visible()
+                binding.btnToggleDetector.isEnabled = false
+                binding.btnToggleDetector.text = "DETECTOR LOCKED"
+            }
+            user.status == Constants.STATUS_EXPIRED || !user.isLicenseActive() -> {
+                binding.tvSubscriptionStatus.text = "Expired"
+                binding.tvSubscriptionStatus.setTextColor(getColor(R.color.status_expired))
+                binding.tvRemainingTime.text = "Subscription expired"
+                binding.ivStatusIndicator.setImageResource(R.drawable.bg_status_expired)
+                binding.tvErrorMessage.text = "Subscription expired. Renew via Telegram."
+                binding.tvErrorMessage.visible()
+                binding.btnRenewViaTelegram.visible()
+                binding.btnToggleDetector.isEnabled = false
+                binding.btnToggleDetector.text = "DETECTOR LOCKED"
+            }
+        }
+
+        // Check permissions
+        checkPermissions()
+    }
+
+    private fun checkPermissions() {
+        // Accessibility Service
+        val accessibilityEnabled = isAccessibilityServiceEnabled()
+        if (accessibilityEnabled) {
+            binding.btnGrantAccessibility.gone()
+            binding.ivAccessibilityCheck.visible()
+            encryptedPrefs.setAccessibilityGranted(true)
+        } else {
+            binding.btnGrantAccessibility.visible()
+            binding.ivAccessibilityCheck.gone()
+        }
+
+        // Overlay Permission
+        val overlayEnabled = Settings.canDrawOverlays(this)
+        if (overlayEnabled) {
+            binding.btnGrantOverlay.gone()
+            binding.ivOverlayCheck.visible()
+            encryptedPrefs.setOverlayGranted(true)
+        } else {
+            binding.btnGrantOverlay.visible()
+            binding.ivOverlayCheck.gone()
+        }
+
+        // Media Projection (checked at runtime)
+        if (encryptedPrefs.isMediaProjectionGranted()) {
+            binding.btnGrantMediaProjection.gone()
+            binding.ivMediaProjectionCheck.visible()
+        } else {
+            binding.btnGrantMediaProjection.visible()
+            binding.ivMediaProjectionCheck.gone()
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val accessibilityManager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val enabledServices = Settings.Secure.getString(contentResolver, 
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        return enabledServices?.contains(packageName) == true
+    }
+
+    private fun requestMediaProjection() {
+        val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) 
+            as MediaProjectionManager
+        startActivityForResult(
+            mediaProjectionManager.createScreenCaptureIntent(),
+            Constants.REQUEST_MEDIA_PROJECTION
+        )
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == Constants.REQUEST_MEDIA_PROJECTION) {
+            if (resultCode == RESULT_OK && data != null) {
+                encryptedPrefs.setMediaProjectionGranted(true)
+                encryptedPrefs.saveMediaProjectionData(resultCode, data)
+                checkPermissions()
+                showToast("Screen recording permission granted")
+            } else {
+                showToast("Screen recording permission denied")
+            }
+        }
+    }
+
+    private fun toggleDetector() {
+        if (isDetectorRunning) {
+            stopDetector()
+        } else {
+            startDetector()
+        }
+    }
+
+    private fun startDetector() {
+        val resultCode = encryptedPrefs.getMediaProjectionResultCode()
+        val resultData = encryptedPrefs.getMediaProjectionData()
+
+        if (resultCode == -1 || resultData == null) {
+            requestMediaProjection()
+            return
+        }
+
+        val intent = Intent(this, DetectionService::class.java).apply {
+            putExtra(DetectionService.EXTRA_RESULT_CODE, resultCode)
+            putExtra(DetectionService.EXTRA_RESULT_DATA, resultData)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+
+        // Start floating widget
+        startService(Intent(this, FloatingWidgetService::class.java))
+
+        isDetectorRunning = true
+        binding.btnToggleDetector.text = "STOP DETECTOR"
+        binding.btnToggleDetector.setBackgroundColor(getColor(R.color.button_danger))
+        binding.tvDetectorStatus.text = "Detector Running"
+        binding.tvDetectorSubtitle.text = "Screen detection is active. Use floating widget to control."
+    }
+
+    private fun stopDetector() {
+        sendBroadcast(Intent(DetectionService.ACTION_STOP))
+        sendBroadcast(Intent(FloatingWidgetService.ACTION_HIDE))
+
+        isDetectorRunning = false
+        binding.btnToggleDetector.text = "START DETECTOR"
+        binding.btnToggleDetector.setBackgroundColor(getColor(R.color.button_primary))
+        binding.tvDetectorStatus.text = "Detector Ready"
+        binding.tvDetectorSubtitle.text = "All permissions granted. Press Start to begin detection."
+    }
+
+    override fun onResume() {
+        super.onResume()
+        checkPermissions()
+    }
+}
+```
+
+### 12.3 Admin Activity (ui/admin/AdminActivity.kt)
+
+```kotlin
+package com.ultra.autodetector.ui.admin
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
+import com.ultra.autodetector.data.firebase.FirestoreManager
+import com.ultra.autodetector.data.model.Template
+import com.ultra.autodetector.data.model.User
+import com.ultra.autodetector.databinding.ActivityAdminBinding
+import com.ultra.autodetector.ui.adapter.TemplateAdapter
+import com.ultra.autodetector.ui.adapter.UserAdapter
+import com.ultra.autodetector.ui.auth.AuthActivity
+import com.ultra.autodetector.util.Constants
+import com.ultra.autodetector.util.gone
+import com.ultra.autodetector.util.visible
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+
+/**
+ * Admin Control Panel.
+ * Restricted to admin user only (diwanatik84@gmail.com).
+ * 
+ * Features:
+ * - User list with license management (1D, 2D, 3D, Lifetime, Reject)
+ * - Template upload and management
+ * - Real-time updates via Firestore snapshots
+ */
+class AdminActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityAdminBinding
+    private val firestoreManager = FirestoreManager()
+
+    private lateinit var userAdapter: UserAdapter
+    private lateinit var templateAdapter: TemplateAdapter
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityAdminBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        // Security check - only admin allowed
+        val currentEmail = Firebase.auth.currentUser?.email
+        if (currentEmail != Constants.ADMIN_EMAIL) {
+            Toast.makeText(this, "Access denied: Admin only", Toast.LENGTH_LONG).show()
+            startActivity(Intent(this, AuthActivity::class.java))
+            finish()
+            return
+        }
+
+        setupToolbar()
+        setupRecyclerViews()
+        setupClickListeners()
+        observeData()
+    }
+
+    private fun setupToolbar() {
+        setSupportActionBar(binding.toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        binding.toolbar.setNavigationOnClickListener { finish() }
+    }
+
+    private fun setupRecyclerViews() {
+        // User adapter with license action callbacks
+        userAdapter = UserAdapter(
+            onGrant1Day = { user -> grantLicense(user, Constants.ONE_DAY_MS) },
+            onGrant2Days = { user -> grantLicense(user, Constants.TWO_DAYS_MS) },
+            onGrant3Days = { user -> grantLicense(user, Constants.THREE_DAYS_MS) },
+            onGrantLifetime = { user -> grantLicense(user, Constants.LIFETIME_MS, true) },
+            onReject = { user -> rejectUser(user) }
+        )
+
+        binding.rvUsers.layoutManager = LinearLayoutManager(this)
+        binding.rvUsers.adapter = userAdapter
+
+        // Template adapter
+        templateAdapter = TemplateAdapter(
+            onDelete = { template -> deleteTemplate(template) }
+        )
+
+        binding.rvTemplates.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        binding.rvTemplates.adapter = templateAdapter
+    }
+
+    private fun setupClickListeners() {
+        binding.btnUploadTemplate.setOnClickListener {
+            showTemplateUploadDialog()
+        }
+    }
+
+    private fun observeData() {
+        lifecycleScope.launch {
+            firestoreManager.getUsersFlow().collectLatest { users ->
+                userAdapter.submitList(users)
+            }
+        }
+
+        lifecycleScope.launch {
+            firestoreManager.getTemplatesFlow().collectLatest { templates ->
+                templateAdapter.submitList(templates)
+            }
+        }
+    }
+
+    private fun grantLicense(user: User, durationMs: Long, isLifetime: Boolean = false) {
+        lifecycleScope.launch {
+            try {
+                firestoreManager.grantLicense(user.uid, durationMs, isLifetime)
+                Toast.makeText(this@AdminActivity, 
+                    "License granted to ${user.email}", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@AdminActivity, 
+                    "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun rejectUser(user: User) {
+        AlertDialog.Builder(this)
+            .setTitle("Reject User")
+            .setMessage("Are you sure you want to reject ${user.email}?")
+            .setPositiveButton("Reject") { _, _ ->
+                lifecycleScope.launch {
+                    try {
+                        firestoreManager.rejectUser(user.uid)
+                        Toast.makeText(this@AdminActivity, 
+                            "User rejected: ${user.email}", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(this@AdminActivity, 
+                            "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showTemplateUploadDialog() {
+        // Implementation: Show dialog to select image from gallery
+        // Then upload to Firebase Storage and create Firestore document
+        val intent = Intent(Intent.ACTION_PICK).apply {
+            type = "image/*"
+        }
+        startActivityForResult(intent, 1001)
+    }
+
+    private fun deleteTemplate(template: Template) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete Template")
+            .setMessage("Delete ${template.name}?")
+            .setPositiveButton("Delete") { _, _ ->
+                lifecycleScope.launch {
+                    try {
+                        firestoreManager.deleteTemplate(template.templateId)
+                        Toast.makeText(this@AdminActivity, 
+                            "Template deleted", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(this@AdminActivity, 
+                            "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 1001 && resultCode == RESULT_OK) {
+            data?.data?.let { uri ->
+                // Upload template image
+                lifecycleScope.launch {
+                    // Implementation: Upload to Storage, get URL, create Firestore document
+                    Toast.makeText(this@AdminActivity, 
+                        "Template upload started", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+}
+```
+
+---
+
+## 📋 SECTION 13: ADAPTERS
+
+### 13.1 User Adapter (ui/adapter/UserAdapter.kt)
+
+```kotlin
+package com.ultra.autodetector.ui.adapter
+
+import android.view.LayoutInflater
+import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
+import com.ultra.autodetector.R
+import com.ultra.autodetector.data.model.User
+import com.ultra.autodetector.databinding.ItemUserRowBinding
+import com.ultra.autodetector.util.Constants
+
+class UserAdapter(
+    private val onGrant1Day: (User) -> Unit,
+    private val onGrant2Days: (User) -> Unit,
+    private val onGrant3Days: (User) -> Unit,
+    private val onGrantLifetime: (User) -> Unit,
+    private val onReject: (User) -> Unit
+) : ListAdapter<User, UserAdapter.UserViewHolder>(UserDiffCallback()) {
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
+        val binding = ItemUserRowBinding.inflate(
+            LayoutInflater.from(parent.context), parent, false
+        )
+        return UserViewHolder(binding)
+    }
+
+    override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
+        holder.bind(getItem(position))
+    }
+
+    inner class UserViewHolder(
+        private val binding: ItemUserRowBinding
+    ) : RecyclerView.ViewHolder(binding.root) {
+
+        fun bind(user: User) {
+            binding.tvUserEmail.text = user.email
+            binding.tvUserStatus.text = user.status.capitalize()
+            binding.tvRemainingTime.text = when (user.status) {
+                Constants.STATUS_APPROVED -> user.getRemainingTimeText()
+                Constants.STATUS_PENDING -> "Awaiting approval"
+                Constants.STATUS_REJECTED -> "Account rejected"
+                Constants.STATUS_EXPIRED -> "Subscription expired"
+                else -> "Unknown"
+            }
+
+            // Status color
+            val statusColor = when (user.status) {
+                Constants.STATUS_APPROVED -> R.color.status_approved
+                Constants.STATUS_PENDING -> R.color.status_pending
+                Constants.STATUS_REJECTED -> R.color.status_rejected
+                Constants.STATUS_EXPIRED -> R.color.status_expired
+                else -> R.color.text_secondary
+            }
+            binding.tvUserStatus.setTextColor(itemView.context.getColor(statusColor))
+
+            // Button click listeners
+            binding.btnGrant1Day.setOnClickListener { onGrant1Day(user) }
+            binding.btnGrant2Days.setOnClickListener { onGrant2Days(user) }
+            binding.btnGrant3Days.setOnClickListener { onGrant3Days(user) }
+            binding.btnGrantLifetime.setOnClickListener { onGrantLifetime(user) }
+            binding.btnReject.setOnClickListener { onReject(user) }
+        }
+    }
+
+    class UserDiffCallback : DiffUtil.ItemCallback<User>() {
+        override fun areItemsTheSame(oldItem: User, newItem: User): Boolean {
+            return oldItem.uid == newItem.uid
+        }
+
+        override fun areContentsTheSame(oldItem: User, newItem: User): Boolean {
+            return oldItem == newItem
+        }
+    }
+}
+```
+
+### 13.2 Template Adapter (ui/adapter/TemplateAdapter.kt)
+
+```kotlin
+package com.ultra.autodetector.ui.adapter
+
+import android.view.LayoutInflater
+import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import com.ultra.autodetector.data.model.Template
+import com.ultra.autodetector.databinding.ItemTemplateRowBinding
+
+class TemplateAdapter(
+    private val onDelete: (Template) -> Unit
+) : ListAdapter<Template, TemplateAdapter.TemplateViewHolder>(TemplateDiffCallback()) {
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TemplateViewHolder {
+        val binding = ItemTemplateRowBinding.inflate(
+            LayoutInflater.from(parent.context), parent, false
+        )
+        return TemplateViewHolder(binding)
+    }
+
+    override fun onBindViewHolder(holder: TemplateViewHolder, position: Int) {
+        holder.bind(getItem(position))
+    }
+
+    inner class TemplateViewHolder(
+        private val binding: ItemTemplateRowBinding
+    ) : RecyclerView.ViewHolder(binding.root) {
+
+        fun bind(template: Template) {
+            binding.tvTemplateName.text = template.name
+            binding.tvTemplateDescription.text = template.description
+
+            // Load template image using Glide
+            Glide.with(itemView.context)
+                .load(template.downloadUrl)
+                .placeholder(R.drawable.ic_detector)
+                .into(binding.ivTemplateImage)
+
+            binding.btnDeleteTemplate.setOnClickListener {
+                onDelete(template)
+            }
+        }
+    }
+
+    class TemplateDiffCallback : DiffUtil.ItemCallback<Template>() {
+        override fun areItemsTheSame(oldItem: Template, newItem: Template): Boolean {
+            return oldItem.templateId == newItem.templateId
+        }
+
+        override fun areContentsTheSame(oldItem: Template, newItem: Template): Boolean {
+            return oldItem == newItem
+        }
+    }
+}
+```
+
+---
+
+## 🎯 FINAL SUMMARY
+
+### Complete Application Flow:
+
+1. **Auth Screen**: User logs in or registers. New users get "pending" status.
+2. **Status Check**: 
+   - Admin (diwanatik84@gmail.com) -> MainActivity directly
+   - Approved + Active -> MainActivity
+   - Pending/Expired/Rejected -> Show status card + Telegram renewal button
+3. **Telegram Renewal**: Click button -> Opens Telegram with pre-filled message to @dminofclicker containing email, status, UID, device info
+4. **Main Dashboard**: Shows permissions, subscription status, detector controls
+5. **Admin Panel**: Only for admin. Manage user licenses and templates.
+6. **Detection Service**: Captures screen, matches templates, dispatches humanized clicks
+7. **AutoClick Service**: Accessibility service for gesture dispatch with jitter
+8. **Floating Widget**: Overlay controls for play/pause/stop
+
+### Key Security Features:
+- Firestore rules enforce admin-only writes
+- Encrypted SharedPreferences for sensitive data
+- Admin hardcoded email check
+- License expiration enforcement
+
+### Telegram Integration:
+- Pre-filled message to @dminofclicker
+- Includes user email, status, UID, device info
+- Admin can renew directly from phone
+
+---
+
+**END OF PART 8 - COMPLETE PROMPT**

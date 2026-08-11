@@ -24,8 +24,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun login(email: String, password: String) = action { repository.login(email, password) }
     fun register(email: String, password: String) = action { repository.register(email, password) }
+    fun sendPasswordReset(email: String) = action { repository.sendPasswordReset(email) }
     fun logout() = viewModelScope.launch { repository.logout() }
     fun refresh() = viewModelScope.launch { repository.refresh() }
+    fun refreshAdminData() = viewModelScope.launch { repository.refreshAdminData() }
     fun setPermissions(state: PermissionState) = viewModelScope.launch { repository.setPermissionState(state) }
     fun setDetector(running: Boolean, paused: Boolean = false) =
         viewModelScope.launch { repository.setDetectorState(running, paused) }

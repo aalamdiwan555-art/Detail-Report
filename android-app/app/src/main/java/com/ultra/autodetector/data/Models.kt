@@ -47,6 +47,7 @@ data class PermissionState(
 
 data class AppState(
     val account: Account? = null,
+    val adminUsers: List<Account> = emptyList(),
     val templates: List<DetectionTemplate> = emptyList(),
     val permissionState: PermissionState = PermissionState(),
     val isDetectorRunning: Boolean = false,

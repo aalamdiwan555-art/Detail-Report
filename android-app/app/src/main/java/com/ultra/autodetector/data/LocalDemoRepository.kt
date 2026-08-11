@@ -9,9 +9,14 @@ import java.util.UUID
 
 class LocalDemoRepository(context: Context) : AppRepository {
     private val preferences = context.getSharedPreferences("ultra_local_demo", Context.MODE_PRIVATE)
+    private val savedEmail = preferences.getString("email", "").orEmpty()
     private val _state = MutableStateFlow(
         AppState(
-            account = if (preferences.getBoolean("signed_in", false)) demoUser else null,
+            account = if (preferences.getBoolean("signed_in", false)) {
+                if (savedEmail.equals(demoAdmin.email, ignoreCase = true)) demoAdmin
+                else demoUser.copy(email = savedEmail.ifBlank { demoUser.email })
+            } else null,
+            adminUsers = if (savedEmail.equals(demoAdmin.email, ignoreCase = true)) sampleUsers else emptyList(),
             templates = sampleTemplates,
         ),
     )
@@ -26,8 +31,12 @@ class LocalDemoRepository(context: Context) : AppRepository {
         } else {
             demoUser.copy(email = email)
         }
-        preferences.edit().putBoolean("signed_in", true).apply()
-        _state.value = _state.value.copy(account = account, message = "Welcome back")
+        preferences.edit().putBoolean("signed_in", true).putString("email", account.email).apply()
+        _state.value = _state.value.copy(
+            account = account,
+            adminUsers = if (account.isAdmin) sampleUsers else emptyList(),
+            message = "Welcome back",
+        )
         return Result.success(account)
     }
 
@@ -35,15 +44,30 @@ class LocalDemoRepository(context: Context) : AppRepository {
         if (email.isBlank() || password.length < 6) {
             return Result.failure(IllegalArgumentException("Use a valid email and a password with at least 6 characters."))
         }
-        val account = demoUser.copy(email = email)
-        preferences.edit().putBoolean("signed_in", true).apply()
-        _state.value = _state.value.copy(account = account, message = "Account created. Waiting for approval.")
+        val account = Account(
+            uid = "local-${UUID.randomUUID()}",
+            email = email.trim(),
+            status = AccountStatus.PENDING,
+        )
+        preferences.edit().putBoolean("signed_in", true).putString("email", account.email).apply()
+        _state.value = _state.value.copy(account = account, adminUsers = emptyList(), message = "Account created. Waiting for approval.")
         return Result.success(account)
+    }
+
+    override suspend fun sendPasswordReset(email: String): Result<Unit> {
+        if (email.isBlank()) return Result.failure(IllegalArgumentException("Enter your email address first."))
+        _state.value = _state.value.copy(message = "Demo mode: password reset email simulated.")
+        return Result.success(Unit)
     }
 
     override suspend fun logout() {
         preferences.edit().putBoolean("signed_in", false).apply()
-        _state.value = _state.value.copy(account = null, isDetectorRunning = false, isDetectorPaused = false)
+        _state.value = _state.value.copy(
+            account = null,
+            adminUsers = emptyList(),
+            isDetectorRunning = false,
+            isDetectorPaused = false,
+        )
     }
 
     override suspend fun refresh() {
@@ -58,10 +82,21 @@ class LocalDemoRepository(context: Context) : AppRepository {
         _state.value = _state.value.copy(isDetectorRunning = running, isDetectorPaused = paused)
     }
 
+    override suspend fun refreshAdminData() {
+        if (_state.value.account?.isAdmin == true) {
+            _state.value = _state.value.copy(adminUsers = _state.value.adminUsers.ifEmpty { sampleUsers })
+        }
+    }
+
     override suspend fun grantLicense(uid: String, days: Int?) {
-        val expires = days?.let { System.currentTimeMillis() + it * 86_400_000L } ?: Long.MAX_VALUE
+        val existing = _state.value.adminUsers.firstOrNull { it.uid == uid }?.expiresAtMillis
+        val base = maxOf(System.currentTimeMillis(), existing ?: 0L)
+        val expires = days?.let { base + it * 86_400_000L } ?: Long.MAX_VALUE
         _state.value = _state.value.copy(
             message = "License updated",
+            adminUsers = _state.value.adminUsers.map {
+                if (it.uid == uid) it.copy(status = AccountStatus.ACTIVE, expiresAtMillis = expires) else it
+            },
             account = _state.value.account?.takeIf { it.uid == uid }?.copy(
                 status = AccountStatus.ACTIVE,
                 expiresAtMillis = expires,
@@ -70,7 +105,12 @@ class LocalDemoRepository(context: Context) : AppRepository {
     }
 
     override suspend fun rejectUser(uid: String) {
-        _state.value = _state.value.copy(message = "User rejected")
+        _state.value = _state.value.copy(
+            message = "User rejected",
+            adminUsers = _state.value.adminUsers.map {
+                if (it.uid == uid) it.copy(status = AccountStatus.REJECTED) else it
+            },
+        )
     }
 
     override suspend fun uploadTemplate(name: String, description: String, imageUri: Uri?): Result<DetectionTemplate> {
@@ -108,6 +148,19 @@ class LocalDemoRepository(context: Context) : AppRepository {
         private val sampleTemplates = listOf(
             DetectionTemplate("template-primary", "Primary target", "Main target image used by the detector."),
             DetectionTemplate("template-secondary", "Secondary target", "Optional secondary target for testing.", 0.9f),
+        )
+        private val sampleUsers = listOf(
+            Account(
+                uid = "local-pending-user",
+                email = "pending@local.demo",
+                status = AccountStatus.PENDING,
+            ),
+            Account(
+                uid = "local-active-user",
+                email = "active@local.demo",
+                status = AccountStatus.ACTIVE,
+                expiresAtMillis = System.currentTimeMillis() + 2 * 86_400_000L,
+            ),
         )
     }
 }
