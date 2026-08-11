@@ -1,0 +1,668 @@
+# 🚀 ULTRA MASTER BLUEPRINT PROMPT - PART 7 OF 8
+## Background Services: DetectionService, AutoClickService, FloatingWidgetService
+
+---
+
+## ⚙️ SECTION 11: BACKGROUND SERVICES
+
+### 11.1 Detection Service (service/DetectionService.kt)
+
+```kotlin
+package com.ultra.autodetector.service
+
+import android.app.Notification
+import android.app.PendingIntent
+import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
+import android.os.IBinder
+import android.os.PowerManager
+import androidx.core.app.NotificationCompat
+import com.ultra.autodetector.R
+import com.ultra.autodetector.data.firebase.FirestoreManager
+import com.ultra.autodetector.data.firebase.StorageManager
+import com.ultra.autodetector.opencv.OpenCvManager
+import com.ultra.autodetector.opencv.ScreenCaptureManager
+import com.ultra.autodetector.opencv.TemplateMatcher
+import com.ultra.autodetector.ui.main.MainActivity
+import com.ultra.autodetector.util.Constants
+import com.ultra.autodetector.util.HumanizationEngine
+import kotlinx.coroutines.*
+import org.opencv.core.Mat
+import timber.log.Timber
+
+/**
+ * Foreground service that continuously captures the screen and performs
+ * OpenCV template matching. When a match is found above the confidence threshold,
+ * it dispatches a humanized click via AutoClickService.
+ * 
+ * Runs as a foreground service to prevent being killed by the system.
+ */
+class DetectionService : Service() {
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var detectionJob: Job? = null
+
+    private lateinit var screenCaptureManager: ScreenCaptureManager
+    private val templateMatcher = TemplateMatcher()
+    private val firestoreManager = FirestoreManager()
+    private val storageManager = StorageManager()
+
+    private var mediaProjectionResultCode: Int = -1
+    private var mediaProjectionData: Intent? = null
+
+    // Cache for loaded template Mats
+    private val templateMats = mutableMapOf<String, Mat>()
+    private var templatesLastUpdated: Long = 0
+
+    private lateinit var wakeLock: PowerManager.WakeLock
+
+    companion object {
+        const val EXTRA_RESULT_CODE = "result_code"
+        const val EXTRA_RESULT_DATA = "result_data"
+        const val ACTION_STOP = "com.ultra.autodetector.STOP_DETECTION"
+        const val ACTION_REFRESH_TEMPLATES = "com.ultra.autodetector.REFRESH_TEMPLATES"
+
+        var isRunning = false
+            private set
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        screenCaptureManager = ScreenCaptureManager(this)
+
+        // Acquire wake lock to keep CPU active
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "UltraAutoDetector::DetectionWakeLock"
+        )
+
+        // Register broadcast receiver
+        val filter = IntentFilter().apply {
+            addAction(ACTION_STOP)
+            addAction(ACTION_REFRESH_TEMPLATES)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(broadcastReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(broadcastReceiver, filter)
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopDetection()
+                return START_NOT_STICKY
+            }
+            else -> {
+                // Start detection
+                mediaProjectionResultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, -1) ?: -1
+                mediaProjectionData = intent?.getParcelableExtra(EXTRA_RESULT_DATA)
+
+                if (mediaProjectionResultCode == -1 || mediaProjectionData == null) {
+                    Timber.e("Missing MediaProjection data, cannot start detection")
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+
+                startForegroundService()
+                startDetection()
+            }
+        }
+
+        return START_STICKY
+    }
+
+    private fun startForegroundService() {
+        val notification = createNotification()
+        startForeground(1, notification)
+        isRunning = true
+        Timber.d("Detection service started in foreground")
+    }
+
+    private fun createNotification(): Notification {
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, UltraAutoDetectorApp.NOTIFICATION_CHANNEL_ID)
+            .setContentTitle("Ultra AutoDetector")
+            .setContentText("Screen detection is active")
+            .setSmallIcon(R.drawable.ic_detector)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .build()
+    }
+
+    private fun startDetection() {
+        wakeLock.acquire(10 * 60 * 1000L) // 10 minutes timeout, will re-acquire
+
+        // Start screen capture
+        screenCaptureManager.startCapture(
+            mediaProjectionResultCode,
+            mediaProjectionData!!
+        ) { screenMat ->
+            // Process frame
+            processFrame(screenMat)
+        }
+
+        // Load initial templates
+        serviceScope.launch {
+            loadTemplates()
+        }
+
+        // Periodic template refresh
+        detectionJob = serviceScope.launch {
+            while (isActive) {
+                delay(30000) // Refresh templates every 30 seconds
+                loadTemplates()
+            }
+        }
+
+        Timber.d("Detection loop started")
+    }
+
+    private fun processFrame(screenMat: Mat) {
+        if (templateMats.isEmpty()) return
+
+        // Match against all templates
+        val results = templateMatcher.matchMultipleTemplates(
+            screenMat,
+            templateMats.values.toList(),
+            Constants.CONFIDENCE_THRESHOLD
+        )
+
+        // Find best match
+        val bestMatch = results.filter { it.found }.maxByOrNull { it.confidence }
+
+        bestMatch?.let { match ->
+            if (HumanizationEngine.isCooldownPassed()) {
+                serviceScope.launch {
+                    val humanizedCoords = HumanizationEngine.humanizeClick(
+                        match.centerX,
+                        match.centerY
+                    )
+
+                    humanizedCoords?.let { (x, y) ->
+                        dispatchClick(x, y)
+                        Timber.d("Click dispatched at (%.1f, %.1f), confidence: %.3f",
+                            x, y, match.confidence)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun dispatchClick(x: Float, y: Float) {
+        val intent = Intent(this, AutoClickService::class.java).apply {
+            action = AutoClickService.ACTION_PERFORM_CLICK
+            putExtra(AutoClickService.EXTRA_X, x)
+            putExtra(AutoClickService.EXTRA_Y, y)
+        }
+        startService(intent)
+    }
+
+    private suspend fun loadTemplates() {
+        try {
+            val templates = firestoreManager.getAllTemplates()
+
+            // Download and cache new/updated templates
+            templates.forEach { template ->
+                if (!templateMats.containsKey(template.templateId)) {
+                    val file = storageManager.downloadTemplateImage(
+                        template.downloadUrl,
+                        template.templateId,
+                        this@DetectionService
+                    ).getOrNull()
+
+                    file?.let {
+                        val mat = templateMatcher.loadTemplateFromFile(it.absolutePath)
+                        mat?.let { templateMat ->
+                            templateMats[template.templateId] = templateMat
+                            Timber.d("Template loaded: ${template.name}")
+                        }
+                    }
+                }
+            }
+
+            // Remove templates that are no longer active
+            val activeIds = templates.map { it.templateId }.toSet()
+            templateMats.keys.filter { it !in activeIds }.forEach { id ->
+                OpenCvManager.releaseMat(templateMats[id])
+                templateMats.remove(id)
+                Timber.d("Template removed: $id")
+            }
+
+            templatesLastUpdated = System.currentTimeMillis()
+
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to load templates")
+        }
+    }
+
+    private fun stopDetection() {
+        detectionJob?.cancel()
+        screenCaptureManager.stopCapture()
+
+        // Release all template Mats
+        templateMats.values.forEach { OpenCvManager.releaseMat(it) }
+        templateMats.clear()
+
+        if (wakeLock.isHeld) {
+            wakeLock.release()
+        }
+
+        isRunning = false
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        Timber.d("Detection service stopped")
+    }
+
+    private val broadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ACTION_STOP -> stopDetection()
+                ACTION_REFRESH_TEMPLATES -> {
+                    serviceScope.launch { loadTemplates() }
+                }
+            }
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopDetection()
+        unregisterReceiver(broadcastReceiver)
+        serviceScope.cancel()
+    }
+}
+```
+
+### 11.2 Auto Click Service (service/AutoClickService.kt)
+
+```kotlin
+package com.ultra.autodetector.service
+
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.Path
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.view.accessibility.AccessibilityEvent
+import com.ultra.autodetector.util.HumanizationEngine
+import timber.log.Timber
+import kotlin.random.Random
+
+/**
+ * Accessibility Service that performs humanized touch gestures.
+ * Receives click coordinates from DetectionService and dispatches
+ * taps with micro-delays and spatial jitter to avoid detection.
+ * 
+ * Required permissions:
+ * - BIND_ACCESSIBILITY_SERVICE (declared in manifest)
+ * - User must manually enable in Settings > Accessibility
+ */
+class AutoClickService : AccessibilityService() {
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var isProcessing = false
+
+    companion object {
+        const val ACTION_PERFORM_CLICK = "com.ultra.autodetector.PERFORM_CLICK"
+        const val EXTRA_X = "click_x"
+        const val EXTRA_Y = "click_y"
+
+        var instance: AutoClickService? = null
+            private set
+
+        val isRunning: Boolean
+            get() = instance != null
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
+        Timber.d("AutoClickService connected")
+
+        // Register broadcast receiver for click commands
+        val filter = IntentFilter(ACTION_PERFORM_CLICK)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(clickReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(clickReceiver, filter)
+        }
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Not used, but required by AccessibilityService
+    }
+
+    override fun onInterrupt() {
+        Timber.d("AutoClickService interrupted")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        instance = null
+        unregisterReceiver(clickReceiver)
+        Timber.d("AutoClickService destroyed")
+    }
+
+    /**
+     * Performs a humanized tap gesture at the specified coordinates.
+     * 
+     * Algorithm:
+     * 1. Apply micro-delay (1-100ms random)
+     * 2. Apply spatial jitter (-2 to +2 pixels)
+     * 3. Create tap path with randomized press duration (50-150ms)
+     * 4. Dispatch gesture via AccessibilityService
+     */
+    fun performHumanizedClick(x: Float, y: Float) {
+        if (isProcessing) {
+            Timber.d("Click already in progress, skipping")
+            return
+        }
+
+        isProcessing = true
+
+        // Step 1: Micro-delay
+        val delay = HumanizationEngine.getMicroDelay()
+
+        handler.postDelayed({
+            // Step 2: Apply spatial jitter
+            val (jitteredX, jitteredY) = HumanizationEngine.applyJitter(x, y)
+
+            // Step 3: Randomized press duration (50-150ms for natural tap)
+            val pressDuration = Random.nextLong(50, 151)
+
+            // Step 4: Create and dispatch gesture
+            val path = Path().apply {
+                moveTo(jitteredX, jitteredY)
+            }
+
+            val stroke = GestureDescription.StrokeDescription(
+                path,
+                0,  // Start immediately after delay
+                pressDuration
+            )
+
+            val gesture = GestureDescription.Builder()
+                .addStroke(stroke)
+                .build()
+
+            val result = dispatchGesture(gesture, object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    isProcessing = false
+                    HumanizationEngine.recordClick()
+                    Timber.d("Click completed at (%.1f, %.1f) after %dms delay, %dms press",
+                        jitteredX, jitteredY, delay, pressDuration)
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    isProcessing = false
+                    Timber.w("Click cancelled at (%.1f, %.1f)", jitteredX, jitteredY)
+                }
+            }, handler)
+
+            if (!result) {
+                isProcessing = false
+                Timber.e("Failed to dispatch gesture")
+            }
+
+        }, delay)
+    }
+
+    private val clickReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_PERFORM_CLICK) {
+                val x = intent.getFloatExtra(EXTRA_X, 0f)
+                val y = intent.getFloatExtra(EXTRA_Y, 0f)
+                performHumanizedClick(x, y)
+            }
+        }
+    }
+}
+```
+
+### 11.3 Floating Widget Service (service/FloatingWidgetService.kt)
+
+```kotlin
+package com.ultra.autodetector.service
+
+import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.PixelFormat
+import android.os.Build
+import android.os.IBinder
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import com.ultra.autodetector.R
+import com.ultra.autodetector.databinding.FloatingWidgetLayoutBinding
+import timber.log.Timber
+
+/**
+ * Floating widget overlay service that provides quick controls
+ * (Play/Pause/Stop) for the detector while running over other apps.
+ * 
+ * Features:
+ * - Draggable floating button
+ * - Play: Resume detection
+ * - Pause: Pause detection (keep service alive)
+ * - Close: Stop detection and remove widget
+ */
+class FloatingWidgetService : Service() {
+
+    private lateinit var windowManager: WindowManager
+    private lateinit var floatingView: View
+    private lateinit var binding: FloatingWidgetLayoutBinding
+
+    private var params: WindowManager.LayoutParams? = null
+    private var initialX = 0
+    private var initialY = 0
+    private var initialTouchX = 0f
+    private var initialTouchY = 0f
+    private var isDragging = false
+    private val clickThreshold = 200L // ms
+    private var touchStartTime = 0L
+
+    companion object {
+        const val ACTION_SHOW = "com.ultra.autodetector.SHOW_FLOATING_WIDGET"
+        const val ACTION_HIDE = "com.ultra.autodetector.HIDE_FLOATING_WIDGET"
+        const val ACTION_UPDATE_STATE = "com.ultra.autodetector.UPDATE_WIDGET_STATE"
+        const val EXTRA_IS_RUNNING = "is_running"
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+        // Register broadcast receiver
+        val filter = IntentFilter().apply {
+            addAction(ACTION_HIDE)
+            addAction(ACTION_UPDATE_STATE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(widgetReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(widgetReceiver, filter)
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_HIDE -> {
+                removeWidget()
+                stopSelf()
+            }
+            else -> {
+                if (!::floatingView.isInitialized) {
+                    createFloatingWidget()
+                }
+            }
+        }
+        return START_STICKY
+    }
+
+    private fun createFloatingWidget() {
+        binding = FloatingWidgetLayoutBinding.inflate(LayoutInflater.from(this))
+        floatingView = binding.root
+
+        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+        params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            layoutType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 200
+        }
+
+        // Set up touch listener for dragging
+        floatingView.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params!!.x
+                    initialY = params!!.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    touchStartTime = System.currentTimeMillis()
+                    isDragging = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - initialTouchX).toInt()
+                    val dy = (event.rawY - initialTouchY).toInt()
+
+                    if (kotlin.math.abs(dx) > 10 || kotlin.math.abs(dy) > 10) {
+                        isDragging = true
+                    }
+
+                    params!!.x = initialX + dx
+                    params!!.y = initialY + dy
+                    windowManager.updateViewLayout(floatingView, params)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val elapsed = System.currentTimeMillis() - touchStartTime
+                    if (!isDragging && elapsed < clickThreshold) {
+                        // Toggle expanded view (if implemented)
+                        true
+                    } else {
+                        // Snap to nearest edge
+                        snapToEdge()
+                        true
+                    }
+                }
+                else -> false
+            }
+        }
+
+        // Button click listeners
+        binding.btnPlay.setOnClickListener {
+            sendBroadcast(Intent(DetectionService.ACTION_REFRESH_TEMPLATES))
+            Timber.d("Play button clicked on floating widget")
+        }
+
+        binding.btnPause.setOnClickListener {
+            // Pause detection (implementation depends on DetectionService)
+            Timber.d("Pause button clicked on floating widget")
+        }
+
+        binding.btnClose.setOnClickListener {
+            sendBroadcast(Intent(DetectionService.ACTION_STOP))
+            removeWidget()
+            stopSelf()
+            Timber.d("Close button clicked on floating widget")
+        }
+
+        windowManager.addView(floatingView, params)
+        Timber.d("Floating widget created")
+    }
+
+    private fun snapToEdge() {
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val viewWidth = floatingView.width
+
+        params?.let { p ->
+            p.x = if (p.x + viewWidth / 2 < screenWidth / 2) {
+                0 // Snap to left
+            } else {
+                screenWidth - viewWidth // Snap to right
+            }
+            windowManager.updateViewLayout(floatingView, p)
+        }
+    }
+
+    private fun removeWidget() {
+        if (::floatingView.isInitialized && floatingView.parent != null) {
+            windowManager.removeView(floatingView)
+        }
+    }
+
+    private val widgetReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ACTION_HIDE -> {
+                    removeWidget()
+                    stopSelf()
+                }
+                ACTION_UPDATE_STATE -> {
+                    val isRunning = intent.getBooleanExtra(EXTRA_IS_RUNNING, false)
+                    updateWidgetState(isRunning)
+                }
+            }
+        }
+    }
+
+    private fun updateWidgetState(isRunning: Boolean) {
+        if (!::binding.isInitialized) return
+
+        binding.btnPlay.visibility = if (isRunning) View.GONE else View.VISIBLE
+        binding.btnPause.visibility = if (isRunning) View.VISIBLE else View.GONE
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        super.onDestroy()
+        removeWidget()
+        unregisterReceiver(widgetReceiver)
+        Timber.d("FloatingWidgetService destroyed")
+    }
+}
+```
+
+---
+
+**END OF PART 7**

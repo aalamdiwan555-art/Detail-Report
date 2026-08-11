@@ -1,0 +1,458 @@
+# 🚀 ULTRA MASTER BLUEPRINT PROMPT - PART 5 OF 8
+## Firebase Managers: Auth, Firestore, Storage
+
+---
+
+## 🔥 SECTION 9: FIREBASE MANAGERS
+
+### 9.1 Firebase Auth Manager (data/firebase/FirebaseAuthManager.kt)
+
+```kotlin
+package com.ultra.autodetector.data.firebase
+
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
+import com.ultra.autodetector.data.model.User
+import com.ultra.autodetector.util.Constants
+import kotlinx.coroutines.tasks.await
+import timber.log.Timber
+
+/**
+ * Manages all Firebase Authentication operations.
+ * Handles login, registration, admin override, and user state.
+ */
+class FirebaseAuthManager {
+
+    private val auth: FirebaseAuth = Firebase.auth
+    private val firestoreManager = FirestoreManager()
+
+    val currentUser: FirebaseUser?
+        get() = auth.currentUser
+
+    val isLoggedIn: Boolean
+        get() = auth.currentUser != null
+
+    val isAdmin: Boolean
+        get() = auth.currentUser?.email == Constants.ADMIN_EMAIL
+
+    /**
+     * Login with email and password.
+     * If admin email (diwanatik84@gmail.com), bypasses all checks.
+     */
+    suspend fun login(email: String, password: String): Result<User> {
+        return try {
+            val authResult = auth.signInWithEmailAndPassword(email, password).await()
+            val firebaseUser = authResult.user
+                ?: return Result.failure(Exception("Authentication failed"))
+
+            // Check if this is the hardcoded admin
+            if (email == Constants.ADMIN_EMAIL) {
+                Timber.d("Admin login detected: $email")
+                // Ensure admin document exists with admin privileges
+                ensureAdminDocument(firebaseUser.uid, email)
+            }
+
+            // Fetch user data from Firestore
+            val user = firestoreManager.getUser(firebaseUser.uid)
+                ?: return Result.failure(Exception("User data not found"))
+
+            // Update last login timestamp
+            firestoreManager.updateLastLogin(firebaseUser.uid)
+
+            Result.success(user)
+        } catch (e: Exception) {
+            Timber.e(e, "Login failed for $email")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Register new user.
+     * Creates Firebase Auth account + Firestore user document with status "pending".
+     */
+    suspend fun register(email: String, password: String, deviceInfo: String): Result<User> {
+        return try {
+            val authResult = auth.createUserWithEmailAndPassword(email, password).await()
+            val firebaseUser = authResult.user
+                ?: return Result.failure(Exception("Registration failed"))
+
+            // Create user document in Firestore
+            val user = User(
+                uid = firebaseUser.uid,
+                email = email,
+                role = Constants.ROLE_USER,
+                status = Constants.STATUS_PENDING,
+                expirationTimestamp = null,
+                deviceInfo = deviceInfo
+            )
+
+            firestoreManager.createUser(user)
+            Timber.d("User registered: $email, UID: ${firebaseUser.uid}")
+
+            Result.success(user)
+        } catch (e: Exception) {
+            Timber.e(e, "Registration failed for $email")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Logout current user.
+     */
+    fun logout() {
+        auth.signOut()
+        Timber.d("User logged out")
+    }
+
+    /**
+     * Send password reset email.
+     */
+    suspend fun sendPasswordReset(email: String): Result<Unit> {
+        return try {
+            auth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Ensures admin document exists with admin role and active status.
+     * Called automatically when admin logs in.
+     */
+    private suspend fun ensureAdminDocument(uid: String, email: String) {
+        val existingUser = firestoreManager.getUser(uid)
+        if (existingUser == null || existingUser.role != Constants.ROLE_ADMIN) {
+            val adminUser = User(
+                uid = uid,
+                email = email,
+                role = Constants.ROLE_ADMIN,
+                status = Constants.STATUS_APPROVED,
+                expirationTimestamp = Constants.LIFETIME_MS,
+                deviceInfo = "Admin Device"
+            )
+            firestoreManager.createOrUpdateUser(adminUser)
+            Timber.d("Admin document ensured for $email")
+        }
+    }
+}
+```
+
+### 9.2 Firestore Manager (data/firebase/FirestoreManager.kt)
+
+```kotlin
+package com.ultra.autodetector.data.firebase
+
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
+import com.ultra.autodetector.data.model.Template
+import com.ultra.autodetector.data.model.User
+import com.ultra.autodetector.util.Constants
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
+import timber.log.Timber
+
+/**
+ * Manages all Firestore database operations.
+ * Handles user CRUD, template CRUD, and real-time listeners.
+ */
+class FirestoreManager {
+
+    private val db: FirebaseFirestore = Firebase.firestore
+
+    // ═══════════════════════════════════════════════════════
+    // USER OPERATIONS
+    // ═══════════════════════════════════════════════════════
+
+    suspend fun createUser(user: User) {
+        db.collection(Constants.COLLECTION_USERS)
+            .document(user.uid)
+            .set(user)
+            .await()
+        Timber.d("User created: ${user.email}")
+    }
+
+    suspend fun createOrUpdateUser(user: User) {
+        db.collection(Constants.COLLECTION_USERS)
+            .document(user.uid)
+            .set(user)
+            .await()
+        Timber.d("User updated: ${user.email}")
+    }
+
+    suspend fun getUser(uid: String): User? {
+        return try {
+            val snapshot = db.collection(Constants.COLLECTION_USERS)
+                .document(uid)
+                .get()
+                .await()
+            snapshot.toObject(User::class.java)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get user: $uid")
+            null
+        }
+    }
+
+    suspend fun updateLastLogin(uid: String) {
+        db.collection(Constants.COLLECTION_USERS)
+            .document(uid)
+            .update(Constants.FIELD_LAST_LOGIN_AT, Timestamp.now())
+            .await()
+    }
+
+    /**
+     * Grant license time to a user.
+     * @param uid Target user UID
+     * @param durationMs Duration in milliseconds
+     * @param isLifetime If true, uses LIFETIME_MS constant
+     */
+    suspend fun grantLicense(uid: String, durationMs: Long, isLifetime: Boolean = false) {
+        val expirationTime = if (isLifetime) {
+            Constants.LIFETIME_MS
+        } else {
+            System.currentTimeMillis() + durationMs
+        }
+
+        val updates = hashMapOf<String, Any>(
+            Constants.FIELD_STATUS to Constants.STATUS_APPROVED,
+            Constants.FIELD_EXPIRATION_TIMESTAMP to expirationTime
+        )
+
+        db.collection(Constants.COLLECTION_USERS)
+            .document(uid)
+            .update(updates)
+            .await()
+
+        // Log admin action
+        logAdminAction("GRANT_LICENSE", uid, "Duration: ${durationMs}ms")
+        Timber.d("License granted to $uid, expires at $expirationTime")
+    }
+
+    /**
+     * Reject a user account.
+     */
+    suspend fun rejectUser(uid: String) {
+        db.collection(Constants.COLLECTION_USERS)
+            .document(uid)
+            .update(Constants.FIELD_STATUS, Constants.STATUS_REJECTED)
+            .await()
+
+        logAdminAction("REJECT_USER", uid, "User rejected")
+        Timber.d("User rejected: $uid")
+    }
+
+    /**
+     * Get all users (for admin panel).
+     */
+    suspend fun getAllUsers(): List<User> {
+        return try {
+            val snapshot = db.collection(Constants.COLLECTION_USERS)
+                .orderBy(Constants.FIELD_CREATED_AT, Query.Direction.DESCENDING)
+                .get()
+                .await()
+            snapshot.toObjects(User::class.java)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get all users")
+            emptyList()
+        }
+    }
+
+    /**
+     * Real-time user list flow for admin panel.
+     */
+    fun getUsersFlow(): Flow<List<User>> = callbackFlow {
+        val listener = db.collection(Constants.COLLECTION_USERS)
+            .orderBy(Constants.FIELD_CREATED_AT, Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Timber.e(error, "Error listening to users")
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val users = snapshot?.toObjects(User::class.java) ?: emptyList()
+                trySend(users)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // TEMPLATE OPERATIONS
+    // ═══════════════════════════════════════════════════════
+
+    suspend fun createTemplate(template: Template) {
+        db.collection(Constants.COLLECTION_TEMPLATES)
+            .document(template.templateId)
+            .set(template)
+            .await()
+        Timber.d("Template created: ${template.name}")
+    }
+
+    suspend fun getAllTemplates(): List<Template> {
+        return try {
+            val snapshot = db.collection(Constants.COLLECTION_TEMPLATES)
+                .whereEqualTo("isActive", true)
+                .get()
+                .await()
+            snapshot.toObjects(Template::class.java)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get templates")
+            emptyList()
+        }
+    }
+
+    suspend fun deleteTemplate(templateId: String) {
+        db.collection(Constants.COLLECTION_TEMPLATES)
+            .document(templateId)
+            .delete()
+            .await()
+        Timber.d("Template deleted: $templateId")
+    }
+
+    fun getTemplatesFlow(): Flow<List<Template>> = callbackFlow {
+        val listener = db.collection(Constants.COLLECTION_TEMPLATES)
+            .whereEqualTo("isActive", true)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Timber.e(error, "Error listening to templates")
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val templates = snapshot?.toObjects(Template::class.java) ?: emptyList()
+                trySend(templates)
+            }
+        awaitClose { listener.remove() }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // ADMIN LOGS
+    // ═══════════════════════════════════════════════════════
+
+    private suspend fun logAdminAction(action: String, targetUid: String, details: String) {
+        try {
+            val log = hashMapOf(
+                "action" to action,
+                "targetUid" to targetUid,
+                "details" to details,
+                "timestamp" to Timestamp.now()
+            )
+            db.collection(Constants.COLLECTION_ADMIN_LOGS)
+                .add(log)
+                .await()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to log admin action")
+        }
+    }
+}
+```
+
+### 9.3 Storage Manager (data/firebase/StorageManager.kt)
+
+```kotlin
+package com.ultra.autodetector.data.firebase
+
+import android.content.Context
+import android.net.Uri
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.ktx.storage
+import com.ultra.autodetector.util.Constants
+import kotlinx.coroutines.tasks.await
+import timber.log.Timber
+import java.io.File
+import java.io.FileInputStream
+
+/**
+ * Manages Firebase Cloud Storage operations.
+ * Handles template image uploads and downloads.
+ */
+class StorageManager {
+
+    private val storage = Firebase.storage
+    private val templatesRef = storage.reference.child(Constants.STORAGE_TEMPLATES_PATH)
+
+    /**
+     * Upload a template image to Firebase Storage.
+     * @param templateId Unique template ID
+     * @param imageUri Local image URI
+     * @return Download URL string
+     */
+    suspend fun uploadTemplateImage(templateId: String, imageUri: Uri, context: Context): Result<String> {
+        return try {
+            val fileRef = templatesRef.child("$templateId.png")
+            val uploadTask = fileRef.putFile(imageUri).await()
+            val downloadUrl = fileRef.downloadUrl.await().toString()
+            Timber.d("Template uploaded: $templateId, URL: $downloadUrl")
+            Result.success(downloadUrl)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to upload template: $templateId")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Upload template image from File.
+     */
+    suspend fun uploadTemplateImage(templateId: String, file: File): Result<String> {
+        return try {
+            val fileRef = templatesRef.child("$templateId.png")
+            val stream = FileInputStream(file)
+            val uploadTask = fileRef.putStream(stream).await()
+            val downloadUrl = fileRef.downloadUrl.await().toString()
+            stream.close()
+            Timber.d("Template uploaded from file: $templateId")
+            Result.success(downloadUrl)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to upload template from file: $templateId")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Download template image to local cache.
+     * @param downloadUrl Firebase Storage download URL
+     * @param templateId Template ID for filename
+     * @param context Application context
+     * @return Local File object
+     */
+    suspend fun downloadTemplateImage(downloadUrl: String, templateId: String, context: Context): Result<File> {
+        return try {
+            val cacheDir = File(context.cacheDir, "templates").apply { mkdirs() }
+            val localFile = File(cacheDir, "$templateId.png")
+
+            storage.getReferenceFromUrl(downloadUrl)
+                .getFile(localFile)
+                .await()
+
+            Timber.d("Template downloaded: $templateId to ${localFile.absolutePath}")
+            Result.success(localFile)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to download template: $templateId")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Delete template image from storage.
+     */
+    suspend fun deleteTemplateImage(templateId: String): Result<Unit> {
+        return try {
+            templatesRef.child("$templateId.png").delete().await()
+            Timber.d("Template deleted from storage: $templateId")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to delete template: $templateId")
+            Result.failure(e)
+        }
+    }
+}
+```
+
+---
+
+**END OF PART 5**
