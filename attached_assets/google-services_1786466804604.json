@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "82080891567",
+    "project_id": "ultra-autodetector-production",
+    "storage_bucket": "ultra-autodetector-production.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:82080891567:android:71833a0f42dfb95b24ca5a",
+        "android_client_info": {
+          "package_name": "com.ultra.autodetector"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFdauMcVe7zgOBh_axtBrDq-IGCt-LtQg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
