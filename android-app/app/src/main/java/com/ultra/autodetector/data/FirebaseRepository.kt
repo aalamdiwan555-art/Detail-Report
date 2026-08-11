@@ -8,8 +8,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
-import com.ultra.autodetector.data.firebase.FirestoreManager
-import com.ultra.autodetector.data.firebase.StorageManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.tasks.await
@@ -115,7 +113,7 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         val target = firestore.collection("users").document(uid).get().await()
         val currentExpiration = (target.get("expirationTimestamp") as? Number)?.toLong() ?: 0L
         val base = maxOf(System.currentTimeMillis(), currentExpiration)
-        val expires = days?.let { base + it * 86_400_000L } ?: Long.MAX_VALUE
+        val expires = days?.let { addDaysWithoutOverflow(base, it) } ?: Long.MAX_VALUE
         val batch = firestore.batch()
         batch.set(
             firestore.collection("users").document(uid),
@@ -169,12 +167,8 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         val reference = storage.reference.child("templates/$id.png")
         try {
             reference.putFile(imageUri).await()
-        } catch (error: Exception) {
-            throw IllegalStateException("Template image upload failed.", error)
-        }
-        val url = reference.downloadUrl.await().toString()
-        val template = DetectionTemplate(id, name.trim(), description.trim(), downloadUrl = url)
-        try {
+            val url = reference.downloadUrl.await().toString()
+            val template = DetectionTemplate(id, name.trim(), description.trim(), downloadUrl = url)
             firestore.collection("templates").document(id).set(
                 mapOf(
                     "templateId" to template.id,
@@ -187,12 +181,12 @@ class FirebaseRepository(private val context: Context) : AppRepository {
                     "createdBy" to auth.currentUser?.uid,
                 ),
             ).await()
+            _state.value = _state.value.copy(message = "Template uploaded")
+            template
         } catch (error: Exception) {
             runCatching { reference.delete().await() }
-            throw IllegalStateException("Template metadata could not be saved.", error)
+            throw IllegalStateException("Template upload could not be completed.", error)
         }
-        _state.value = _state.value.copy(message = "Template uploaded")
-        template
     }
 
     override suspend fun deleteTemplate(templateId: String) {
@@ -236,6 +230,13 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         }
 
     companion object {
+        private fun addDaysWithoutOverflow(baseMillis: Long, days: Int): Long {
+            require(days > 0) { "License duration must be positive." }
+            val increment = days.toLong() * 86_400_000L
+            return if (Long.MAX_VALUE - baseMillis < increment) Long.MAX_VALUE
+            else baseMillis + increment
+        }
+
         fun isConfigured(context: Context): Boolean =
             runCatching { FirebaseApp.getApps(context).isNotEmpty() }.getOrDefault(false)
     }

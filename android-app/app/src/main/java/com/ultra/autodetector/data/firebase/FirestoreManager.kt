@@ -56,7 +56,7 @@ class FirestoreManager(
         val document = users.document(uid).get().await()
         val currentExpiration = (document.get("expirationTimestamp") as? Number)?.toLong() ?: 0L
         val base = maxOf(System.currentTimeMillis(), currentExpiration)
-        val expiration = days?.let { base + it * Constants.ONE_DAY_MS } ?: Constants.LIFETIME_MS
+        val expiration = days?.let { addDaysWithoutOverflow(base, it) } ?: Constants.LIFETIME_MS
         val batch = firestore.batch()
         batch.set(
             users.document(uid),
@@ -132,6 +132,13 @@ class FirestoreManager(
         val user = auth.currentUser ?: error("Authentication required.")
         val isAdmin = user.getIdToken(false).await()?.claims?.get("admin") == true
         require(isAdmin) { "Administrator access required." }
+    }
+
+    private fun addDaysWithoutOverflow(baseMillis: Long, days: Int): Long {
+        require(days > 0) { "License duration must be positive." }
+        val increment = days.toLong() * Constants.ONE_DAY_MS
+        return if (Long.MAX_VALUE - baseMillis < increment) Constants.LIFETIME_MS
+        else baseMillis + increment
     }
 
     private fun mapUser(uid: String, data: Map<String, Any?>): User =

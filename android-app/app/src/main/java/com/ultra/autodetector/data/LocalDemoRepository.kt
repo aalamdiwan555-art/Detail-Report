@@ -91,7 +91,11 @@ class LocalDemoRepository(context: Context) : AppRepository {
     override suspend fun grantLicense(uid: String, days: Int?) {
         val existing = _state.value.adminUsers.firstOrNull { it.uid == uid }?.expiresAtMillis
         val base = maxOf(System.currentTimeMillis(), existing ?: 0L)
-        val expires = days?.let { base + it * 86_400_000L } ?: Long.MAX_VALUE
+        val expires = days?.let {
+            require(it > 0) { "License duration must be positive." }
+            val increment = it.toLong() * 86_400_000L
+            if (Long.MAX_VALUE - base < increment) Long.MAX_VALUE else base + increment
+        } ?: Long.MAX_VALUE
         _state.value = _state.value.copy(
             message = "License updated",
             adminUsers = _state.value.adminUsers.map {

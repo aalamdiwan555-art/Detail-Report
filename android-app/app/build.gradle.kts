@@ -4,6 +4,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// Firebase's Google Services plugin generates the resource values used by
+// FirebaseApp.initializeApp(). Keep it conditional so local demo mode still
+// builds without a project-specific google-services.json.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.ultra.autodetector"
     compileSdk = 35

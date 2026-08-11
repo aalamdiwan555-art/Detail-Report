@@ -135,10 +135,14 @@ class MainActivity : ComponentActivity() {
 
     private fun isAccessibilityEnabled(): Boolean {
         val manager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        return manager.isEnabled && Settings.Secure.getString(
+        val enabledServices = Settings.Secure.getString(
             contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        )?.contains(packageName) == true
+        ).orEmpty()
+        val expectedComponent = "$packageName/${com.ultra.autodetector.service.AutoClickService::class.java.name}"
+        return manager.isEnabled && enabledServices.split(':').any {
+            it.equals(expectedComponent, ignoreCase = true)
+        }
     }
 
     fun requestCapture() {
@@ -148,6 +152,11 @@ class MainActivity : ComponentActivity() {
 
     fun startDetection() {
         val data = mediaProjectionData ?: return requestCapture()
+        if (viewModel.state.value.account?.hasActiveLicense() != true ||
+            !viewModel.state.value.permissionState.allGranted
+        ) {
+            return
+        }
         val intent = Intent(this, DetectionService::class.java).apply {
             action = DetectionService.ACTION_START
             putExtra(DetectionService.EXTRA_RESULT_CODE, mediaProjectionResultCode)
