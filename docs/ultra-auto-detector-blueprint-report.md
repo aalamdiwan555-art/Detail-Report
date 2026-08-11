@@ -933,7 +933,7 @@ Next safe step:
 **Known issues:**
 
 - An Android SDK-enabled environment is required to produce an APK.
-- OpenCV native template matching is isolated behind `DetectionService.FrameAnalyzer`; the capture lifecycle is implemented, but the OpenCV native dependency and actual bitmap/matrix matcher still need to be selected and wired.
+- Template matching is isolated behind the dependency-free `OpenCvManager` and `TemplateMatcher` adapters. The foreground service downloads active authorized templates, evaluates bounded bitmap matches, and dispatches only explicit accessibility gestures. A selected native OpenCV distribution can replace the adapter later.
 - Firebase production mode requires a project-specific `google-services.json` and trusted Firebase custom admin claims.
 - Firebase template listing and admin user listing need live snapshot flows for production parity.
 

@@ -81,10 +81,18 @@ class FloatingWidgetService : Service() {
             text = "Pause"
             contentDescription = "Pause detection"
             setOnClickListener {
-                sendBroadcast(Intent(DetectionService.ACTION_PAUSE).setPackage(packageName).putExtra("paused", true))
+                sendBroadcast(
+                    Intent(DetectionService.ACTION_PAUSE)
+                        .setPackage(packageName)
+                        .putExtra(DetectionService.EXTRA_PAUSED, true),
+                )
                 text = "Resume"
                 setOnClickListener {
-                    sendBroadcast(Intent(DetectionService.ACTION_PAUSE).setPackage(packageName).putExtra("paused", false))
+                    sendBroadcast(
+                        Intent(DetectionService.ACTION_PAUSE)
+                            .setPackage(packageName)
+                            .putExtra(DetectionService.EXTRA_PAUSED, false),
+                    )
                     text = "Pause"
                 }
             }

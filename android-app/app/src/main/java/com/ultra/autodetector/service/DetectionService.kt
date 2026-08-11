@@ -21,6 +21,7 @@ import android.hardware.display.VirtualDisplay
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import android.content.pm.ServiceInfo
+import com.google.firebase.FirebaseApp
 import com.ultra.autodetector.UltraAutoDetectorApp
 import com.ultra.autodetector.R
 import com.ultra.autodetector.data.firebase.FirestoreManager
@@ -57,8 +58,8 @@ class DetectionService : Service() {
     private var paused = false
     private var stopping = false
     private val templateMatcher = TemplateMatcher()
-    private val firestoreManager = FirestoreManager()
-    private val storageManager = StorageManager()
+    private val firestoreManager by lazy { FirestoreManager() }
+    private val storageManager by lazy { StorageManager() }
     private val loadedTemplates = mutableListOf<LoadedTemplate>()
     private var templatesLoaded = false
 
@@ -78,7 +79,7 @@ class DetectionService : Service() {
             ACTION_PAUSE -> paused = intent.getBooleanExtra(EXTRA_PAUSED, true)
             ACTION_REFRESH_TEMPLATES -> {
                 templatesLoaded = false
-                loadTemplates()
+                scope.launch { loadTemplates() }
             }
             ACTION_START, null -> {
                 val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
@@ -145,6 +146,10 @@ class DetectionService : Service() {
 
     private suspend fun loadTemplates() {
         if (templatesLoaded) return
+        if (FirebaseApp.getApps(this).isEmpty()) {
+            templatesLoaded = true
+            return
+        }
         loadedTemplates.forEach { releaseTemplate(it) }
         loadedTemplates.clear()
         runCatching {
@@ -178,7 +183,7 @@ class DetectionService : Service() {
                 loaded.template to templateMatcher.match(
                     screen = screen,
                     template = loaded.bitmap,
-                    threshold = loaded.template.confidenceThreshold,
+                    threshold = loaded.template.confidenceThreshold.toDouble(),
                     maxCandidates = TemplateMatcher.MAX_CANDIDATES_PER_FRAME,
                 )
             }
@@ -240,6 +245,7 @@ class DetectionService : Service() {
         val filter = IntentFilter().apply {
             addAction(ACTION_STOP)
             addAction(ACTION_PAUSE)
+            addAction(ACTION_REFRESH_TEMPLATES)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(controlReceiver, filter, RECEIVER_NOT_EXPORTED)
@@ -254,6 +260,10 @@ class DetectionService : Service() {
             when (intent?.action) {
                 ACTION_STOP -> stopDetection()
                 ACTION_PAUSE -> paused = intent.getBooleanExtra(EXTRA_PAUSED, true)
+                ACTION_REFRESH_TEMPLATES -> {
+                    templatesLoaded = false
+                    scope.launch { loadTemplates() }
+                }
             }
         }
     }

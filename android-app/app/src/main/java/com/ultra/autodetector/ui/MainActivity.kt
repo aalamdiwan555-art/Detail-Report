@@ -165,7 +165,11 @@ class MainActivity : ComponentActivity() {
     }
 
     fun pauseDetection(paused: Boolean) {
-        sendBroadcast(Intent(DetectionService.ACTION_PAUSE).setPackage(packageName).putExtra("paused", paused))
+        sendBroadcast(
+            Intent(DetectionService.ACTION_PAUSE)
+                .setPackage(packageName)
+                .putExtra(DetectionService.EXTRA_PAUSED, paused),
+        )
         viewModel.setDetector(true, paused)
     }
 

@@ -24,15 +24,18 @@ class FirebaseRepository(private val context: Context) : AppRepository {
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
-    private val firestoreManager = FirestoreManager(firestore, auth)
-    private val storageManager = StorageManager(storage)
     private val _state = MutableStateFlow(AppState())
     override val state: Flow<AppState> = _state
 
     override suspend fun login(email: String, password: String): Result<Account> = runCatching {
         val firebaseUser = auth.signInWithEmailAndPassword(email, password).await().user
             ?: error("Authentication failed")
-        val account = loadAccount(firebaseUser.uid, firebaseUser.email.orEmpty())
+        val account = loadAccount(
+            firebaseUser.uid,
+            firebaseUser.email.orEmpty(),
+            firestore.collection("users").document(firebaseUser.uid).get().await().data.orEmpty(),
+            isAdmin = hasAdminClaim(forceRefresh = true),
+        )
         _state.value = _state.value.copy(account = account)
         refresh()
         account
@@ -68,7 +71,12 @@ class FirebaseRepository(private val context: Context) : AppRepository {
 
     override suspend fun refresh() {
         val current = auth.currentUser ?: return
-        val account = loadAccount(current.uid, current.email.orEmpty())
+        val account = loadAccount(
+            current.uid,
+            current.email.orEmpty(),
+            firestore.collection("users").document(current.uid).get().await().data.orEmpty(),
+            isAdmin = hasAdminClaim(),
+        )
         _state.value = _state.value.copy(
             account = account,
             templates = loadTemplates(),
@@ -87,12 +95,15 @@ class FirebaseRepository(private val context: Context) : AppRepository {
     override suspend fun refreshAdminData() {
         val current = _state.value.account ?: return
         if (!current.isAdmin) return
+        val currentIsAdmin = hasAdminClaim()
+        if (!currentIsAdmin) return
         val users = firestore.collection("users").get().await().documents
             .map { document ->
                 loadAccount(
                     uid = document.id,
                     fallbackEmail = document.getString("email").orEmpty(),
                     data = document.data.orEmpty(),
+                    isAdmin = document.id == current.uid && currentIsAdmin,
                 )
             }
             .filterNot { it.uid == current.uid }
@@ -191,15 +202,12 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         refresh()
     }
 
-    private suspend fun loadAccount(uid: String, fallbackEmail: String): Account =
-        loadAccount(
-            uid,
-            fallbackEmail,
-            firestore.collection("users").document(uid).get().await().data.orEmpty(),
-        )
-
-    private suspend fun loadAccount(uid: String, fallbackEmail: String, data: Map<String, Any?>): Account {
-        val role = if (uid == auth.currentUser?.uid && hasAdminClaim()) "admin" else "user"
+    private fun loadAccount(
+        uid: String,
+        fallbackEmail: String,
+        data: Map<String, Any?>,
+        isAdmin: Boolean,
+    ): Account {
         val status = when (data["status"] as? String) {
             "approved" -> AccountStatus.ACTIVE
             "rejected" -> AccountStatus.REJECTED
@@ -207,11 +215,11 @@ class FirebaseRepository(private val context: Context) : AppRepository {
             else -> AccountStatus.PENDING
         }
         val expires = (data["expirationTimestamp"] as? Number)?.toLong()
-        return Account(uid, data["email"] as? String ?: fallbackEmail, role == "admin", status, expires)
+        return Account(uid, data["email"] as? String ?: fallbackEmail, isAdmin, status, expires)
     }
 
-    private suspend fun hasAdminClaim(): Boolean = runCatching {
-        auth.currentUser?.getIdToken(false)?.await()?.claims?.get("admin") == true
+    private suspend fun hasAdminClaim(forceRefresh: Boolean = false): Boolean = runCatching {
+        auth.currentUser?.getIdToken(forceRefresh)?.await()?.claims?.get("admin") == true
     }.getOrDefault(false)
 
     private suspend fun loadTemplates(): List<DetectionTemplate> =
