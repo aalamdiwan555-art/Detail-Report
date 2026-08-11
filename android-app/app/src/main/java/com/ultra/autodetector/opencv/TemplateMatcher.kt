@@ -136,5 +136,6 @@ class TemplateMatcher {
     companion object {
         const val DEFAULT_THRESHOLD = 0.85
         const val MAX_CANDIDATES = 2_500
+        const val MAX_CANDIDATES_PER_FRAME = 1_000
     }
 }

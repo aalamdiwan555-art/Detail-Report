@@ -8,6 +8,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -21,7 +23,13 @@ import androidx.core.app.ServiceCompat
 import android.content.pm.ServiceInfo
 import com.ultra.autodetector.UltraAutoDetectorApp
 import com.ultra.autodetector.R
+import com.ultra.autodetector.data.firebase.FirestoreManager
+import com.ultra.autodetector.data.firebase.StorageManager
+import com.ultra.autodetector.data.model.Template
+import com.ultra.autodetector.opencv.OpenCvManager
+import com.ultra.autodetector.opencv.TemplateMatcher
 import com.ultra.autodetector.ui.MainActivity
+import com.ultra.autodetector.util.HumanizationEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,13 +38,14 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * Native capture lifecycle. Matching is deliberately bounded and paused by
  * explicit user state; this service never starts on its own.
  *
- * The OpenCV matcher is kept behind [FrameAnalyzer] so the project can build
- * without native binaries while Firebase/OpenCV are being configured.
+ * The matcher is kept behind dependency-free bitmap adapters so the project
+ * can build without an unselected native OpenCV binary.
  */
 class DetectionService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -47,7 +56,11 @@ class DetectionService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var paused = false
     private var stopping = false
-    private var frameAnalyzer: FrameAnalyzer = FrameAnalyzer()
+    private val templateMatcher = TemplateMatcher()
+    private val firestoreManager = FirestoreManager()
+    private val storageManager = StorageManager()
+    private val loadedTemplates = mutableListOf<LoadedTemplate>()
+    private var templatesLoaded = false
 
     override fun onCreate() {
         super.onCreate()
@@ -63,6 +76,10 @@ class DetectionService : Service() {
         when (intent?.action) {
             ACTION_STOP -> stopDetection()
             ACTION_PAUSE -> paused = intent.getBooleanExtra(EXTRA_PAUSED, true)
+            ACTION_REFRESH_TEMPLATES -> {
+                templatesLoaded = false
+                loadTemplates()
+            }
             ACTION_START, null -> {
                 val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
                     ?: Activity.RESULT_CANCELED
@@ -110,16 +127,74 @@ class DetectionService : Service() {
         )
         wakeLock?.takeUnless { it.isHeld }?.acquire(10 * 60 * 1000L)
         detectionJob = scope.launch {
+            loadTemplates()
             while (isActive) {
                 if (!paused) {
                     imageReader?.acquireLatestImage()?.use { image ->
-                        frameAnalyzer.analyze(image)
+                        OpenCvManager.imageToBitmap(image)?.let { bitmap ->
+                            analyzeFrame(bitmap)
+                            OpenCvManager.releaseBitmap(bitmap)
+                        }
                     }
                 }
                 delay(FRAME_INTERVAL_MS)
             }
         }
         isRunning = true
+    }
+
+    private suspend fun loadTemplates() {
+        if (templatesLoaded) return
+        loadedTemplates.forEach { releaseTemplate(it) }
+        loadedTemplates.clear()
+        runCatching {
+            firestoreManager.listTemplates()
+                .asSequence()
+                .filter { it.isActive && it.downloadUrl.isNotBlank() }
+                .take(MAX_TEMPLATES)
+                .mapNotNull { template ->
+                    val localFile = storageManager
+                        .downloadTemplateImage(template.downloadUrl, template.templateId, this)
+                        .getOrNull()
+                        ?: return@mapNotNull null
+                    val bitmap = BitmapFactory.decodeFile(localFile.absolutePath)
+                    if (bitmap == null) {
+                        runCatching { localFile.delete() }
+                        null
+                    } else {
+                        LoadedTemplate(template, bitmap, localFile)
+                    }
+                }
+                .toList()
+                .also { loadedTemplates.addAll(it) }
+        }
+        templatesLoaded = true
+    }
+
+    private fun analyzeFrame(screen: Bitmap) {
+        if (loadedTemplates.isEmpty() || !HumanizationEngine.isCooldownPassed()) return
+        val bestMatch = loadedTemplates.asSequence()
+            .map { loaded ->
+                loaded.template to templateMatcher.match(
+                    screen = screen,
+                    template = loaded.bitmap,
+                    threshold = loaded.template.confidenceThreshold,
+                    maxCandidates = TemplateMatcher.MAX_CANDIDATES_PER_FRAME,
+                )
+            }
+            .filter { (_, result) -> result.found }
+            .maxByOrNull { (_, result) -> result.confidence }
+            ?: return
+
+        val (jitteredX, jitteredY) = HumanizationEngine.applyJitter(
+            bestMatch.second.centerX,
+            bestMatch.second.centerY,
+        )
+        AutoClickService.instance?.performUserRequestedClick(
+            HumanizationEngine.clampCoordinate(jitteredX, screen.width - 1f),
+            HumanizationEngine.clampCoordinate(jitteredY, screen.height - 1f),
+        )
+        HumanizationEngine.recordClick()
     }
 
     private fun stopDetection() {
@@ -133,6 +208,9 @@ class DetectionService : Service() {
         virtualDisplay = null
         mediaProjection?.stop()
         mediaProjection = null
+        loadedTemplates.forEach { releaseTemplate(it) }
+        loadedTemplates.clear()
+        templatesLoaded = false
         wakeLock?.takeIf { it.isHeld }?.release()
         isRunning = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
@@ -189,24 +267,28 @@ class DetectionService : Service() {
         super.onDestroy()
     }
 
-    class FrameAnalyzer {
-        fun analyze(image: android.media.Image) {
-            // The production OpenCV adapter belongs here. Keeping frame
-            // ownership in this class ensures Image.close() is always called.
-            // A future adapter can emit a click request to AutoClickService.
-            image.width
-        }
+    private fun releaseTemplate(template: LoadedTemplate) {
+        OpenCvManager.releaseBitmap(template.bitmap)
+        runCatching { template.file.delete() }
     }
+
+    private data class LoadedTemplate(
+        val template: Template,
+        val bitmap: Bitmap,
+        val file: File,
+    )
 
     companion object {
         const val ACTION_START = "com.ultra.autodetector.action.START"
         const val ACTION_STOP = "com.ultra.autodetector.action.STOP"
         const val ACTION_PAUSE = "com.ultra.autodetector.action.PAUSE"
+        const val ACTION_REFRESH_TEMPLATES = "com.ultra.autodetector.action.REFRESH_TEMPLATES"
         const val EXTRA_RESULT_CODE = "com.ultra.autodetector.extra.RESULT_CODE"
         const val EXTRA_RESULT_DATA = "com.ultra.autodetector.extra.RESULT_DATA"
         const val EXTRA_PAUSED = "com.ultra.autodetector.extra.PAUSED"
         private const val NOTIFICATION_ID = 101
         private const val FRAME_INTERVAL_MS = 100L
+        private const val MAX_TEMPLATES = 20
         @Volatile var isRunning: Boolean = false
             private set
     }

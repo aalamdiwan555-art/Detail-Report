@@ -8,6 +8,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
+import com.ultra.autodetector.data.firebase.FirestoreManager
+import com.ultra.autodetector.data.firebase.StorageManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.tasks.await
@@ -22,6 +24,8 @@ class FirebaseRepository(private val context: Context) : AppRepository {
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
+    private val firestoreManager = FirestoreManager(firestore, auth)
+    private val storageManager = StorageManager(storage)
     private val _state = MutableStateFlow(AppState())
     override val state: Flow<AppState> = _state
 
@@ -194,8 +198,8 @@ class FirebaseRepository(private val context: Context) : AppRepository {
             firestore.collection("users").document(uid).get().await().data.orEmpty(),
         )
 
-    private fun loadAccount(uid: String, fallbackEmail: String, data: Map<String, Any?>): Account {
-        val role = data["role"] as? String
+    private suspend fun loadAccount(uid: String, fallbackEmail: String, data: Map<String, Any?>): Account {
+        val role = if (uid == auth.currentUser?.uid && hasAdminClaim()) "admin" else "user"
         val status = when (data["status"] as? String) {
             "approved" -> AccountStatus.ACTIVE
             "rejected" -> AccountStatus.REJECTED
@@ -205,6 +209,10 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         val expires = (data["expirationTimestamp"] as? Number)?.toLong()
         return Account(uid, data["email"] as? String ?: fallbackEmail, role == "admin", status, expires)
     }
+
+    private suspend fun hasAdminClaim(): Boolean = runCatching {
+        auth.currentUser?.getIdToken(false)?.await()?.claims?.get("admin") == true
+    }.getOrDefault(false)
 
     private suspend fun loadTemplates(): List<DetectionTemplate> =
         firestore.collection("templates").get().await().documents.mapNotNull { document ->
