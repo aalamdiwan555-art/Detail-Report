@@ -2,6 +2,7 @@ package com.ultra.autodetector.data
 
 import android.content.Context
 import android.net.Uri
+import android.util.Patterns
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,12 +24,18 @@ class LocalDemoRepository(context: Context) : AppRepository {
     override val state: StateFlow<AppState> = _state.asStateFlow()
 
     override suspend fun login(email: String, password: String): Result<Account> {
-        if (email.isBlank() || password.length < 6) {
-            return Result.failure(IllegalArgumentException("Enter a valid email and a password with at least 6 characters."))
+        if (!isValidEmail(email) || password.length < 8) {
+            return Result.failure(IllegalArgumentException("Enter a valid email and a password with at least 8 characters."))
         }
         val account = if (email.equals("admin@local.demo", ignoreCase = true)) {
+            if (password != "UltraAdmin!26") {
+                return Result.failure(IllegalArgumentException("Incorrect email or password."))
+            }
             demoAdmin
         } else {
+            if (password != "ActiveUser!26") {
+                return Result.failure(IllegalArgumentException("Incorrect email or password."))
+            }
             demoUser.copy(email = email)
         }
         preferences.edit().putBoolean("signed_in", true).putString("email", account.email).apply()
@@ -41,8 +48,8 @@ class LocalDemoRepository(context: Context) : AppRepository {
     }
 
     override suspend fun register(email: String, password: String): Result<Account> {
-        if (email.isBlank() || password.length < 6) {
-            return Result.failure(IllegalArgumentException("Use a valid email and a password with at least 6 characters."))
+        if (!isValidEmail(email) || password.length < 8) {
+            return Result.failure(IllegalArgumentException("Use a valid email and a password with at least 8 characters."))
         }
         val account = Account(
             uid = "local-${UUID.randomUUID()}",
@@ -54,11 +61,21 @@ class LocalDemoRepository(context: Context) : AppRepository {
         return Result.success(account)
     }
 
+    override suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+    ): Result<Unit> = Result.failure(
+        IllegalStateException("The legacy demo repository does not support password changes."),
+    )
+
     override suspend fun sendPasswordReset(email: String): Result<Unit> {
-        if (email.isBlank()) return Result.failure(IllegalArgumentException("Enter your email address first."))
+        if (!isValidEmail(email)) return Result.failure(IllegalArgumentException("Enter a valid email address first."))
         _state.value = _state.value.copy(message = "Demo mode: password reset email simulated.")
         return Result.success(Unit)
     }
+
+    private fun isValidEmail(email: String): Boolean =
+        Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
 
     override suspend fun logout() {
         preferences.edit().putBoolean("signed_in", false).apply()

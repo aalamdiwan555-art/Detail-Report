@@ -92,6 +92,12 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
                 "uid = ?",
                 arrayOf("local-admin"),
             )
+            db.update(
+                "users",
+                ContentValues().apply { put("password_hash", DEMO_USER_PASSWORD_HASH) },
+                "uid IN (?, ?)",
+                arrayOf("local-pending-user", "local-active-user"),
+            )
         }
     }
 
@@ -156,6 +162,15 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
                 put("status", status.name)
                 put("expires_at_millis", expiresAtMillis)
             },
+            "uid = ?",
+            arrayOf(uid),
+        )
+    }
+
+    internal fun updateUserPassword(uid: String, passwordHash: String) {
+        writableDatabase.update(
+            "users",
+            ContentValues().apply { put("password_hash", passwordHash) },
             "uid = ?",
             arrayOf(uid),
         )
@@ -293,6 +308,7 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
             db = db,
             uid = "local-pending-user",
             email = "pending@local.demo",
+            passwordHash = DEMO_USER_PASSWORD_HASH,
             status = AccountStatus.PENDING,
             expiresAtMillis = null,
             createdAtMillis = now + 1,
@@ -301,6 +317,7 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
             db = db,
             uid = "local-active-user",
             email = "active@local.demo",
+            passwordHash = DEMO_USER_PASSWORD_HASH,
             status = AccountStatus.ACTIVE,
             expiresAtMillis = now + 2 * DAY_MILLIS,
             createdAtMillis = now + 2,
@@ -328,6 +345,7 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
         db: SQLiteDatabase,
         uid: String,
         email: String,
+        passwordHash: String,
         status: AccountStatus,
         expiresAtMillis: Long?,
         createdAtMillis: Long,
@@ -338,7 +356,7 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
             ContentValues().apply {
                 put("uid", uid)
                 put("email", email)
-                put("password_hash", "")
+                put("password_hash", passwordHash)
                 put("is_admin", 0)
                 put("status", status.name)
                 put("expires_at_millis", expiresAtMillis)
@@ -398,6 +416,8 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(
          */
         const val ADMIN_PASSWORD_HASH =
             "2f441b3a48a433f4931311b899bf5e9931a9e3127622c2f50a5ed0a0f209a723"
+        const val DEMO_USER_PASSWORD_HASH =
+            "fbf4ce71b853077aea971b94913bb1a14c9b4c94bcbc3110e4942299257a1c9d"
         private val USER_COLUMNS = arrayOf(
             "uid",
             "email",

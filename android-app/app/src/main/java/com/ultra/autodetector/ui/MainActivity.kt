@@ -222,6 +222,8 @@ private fun UltraApp(viewModel: MainViewModel, activity: MainActivity) {
                 onAccessibility = activity::openAccessibilitySettings,
                 onOverlay = activity::openOverlaySettings,
                 onNotifications = activity::requestNotifications,
+                onChangePassword = viewModel::changePassword,
+                message = state.message,
             )
             else -> DashboardScreen(
                 state = state,
@@ -297,7 +299,7 @@ private fun AuthScreen(
             }
             message?.let { Text(it, color = Teal, fontSize = 13.sp) }
             Text(
-                "Local demo mode is available until Firebase is configured.",
+                "Local mode keeps accounts and templates on this device. Passwords require at least 8 characters.",
                 color = Muted,
                 fontSize = 12.sp,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -521,7 +523,12 @@ private fun SettingsScreen(
     onAccessibility: () -> Unit,
     onOverlay: () -> Unit,
     onNotifications: () -> Unit,
+    onChangePassword: (String, String) -> Unit,
+    message: String?,
 ) {
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
     Scaffold(
         containerColor = Ink,
         topBar = { TopAppBar(title = { Text("Settings", color = Color.White) }, navigationIcon = { TextButton(onClick = onBack) { Text("Back", color = Teal) } }) },
@@ -531,6 +538,52 @@ private fun SettingsScreen(
             SettingButton("Open accessibility settings", onAccessibility)
             SettingButton("Open overlay settings", onOverlay)
             SettingButton("Allow notifications", onNotifications)
+            Divider(color = Color(0x2233FFFFFF))
+            Text("Account security", color = Teal, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = currentPassword,
+                onValueChange = { currentPassword = it },
+                label = { Text("Current password") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = newPassword,
+                onValueChange = { newPassword = it },
+                label = { Text("New password") },
+                supportingText = { Text("Use at least 8 characters.") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = { confirmPassword = it },
+                label = { Text("Confirm new password") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    if (newPassword != confirmPassword) {
+                        return@Button
+                    }
+                    onChangePassword(currentPassword, newPassword)
+                    currentPassword = ""
+                    newPassword = ""
+                    confirmPassword = ""
+                },
+                enabled = currentPassword.isNotBlank() &&
+                    newPassword.length >= 8 &&
+                    newPassword == confirmPassword,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Teal, contentColor = Ink),
+            ) {
+                Text("Update password")
+            }
+            message?.let { Text(it, color = Teal, fontSize = 13.sp) }
             Divider(color = Color(0x2233FFFFFF))
             Text("Privacy", color = Teal, fontWeight = FontWeight.Bold)
             Text(

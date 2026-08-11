@@ -24,6 +24,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun login(email: String, password: String) = action { repository.login(email, password) }
     fun register(email: String, password: String) = action { repository.register(email, password) }
+    fun changePassword(currentPassword: String, newPassword: String) =
+        action { repository.changePassword(currentPassword, newPassword) }
     fun sendPasswordReset(email: String) = action { repository.sendPasswordReset(email) }
     fun logout() = viewModelScope.launch { repository.logout() }
     fun refresh() = viewModelScope.launch { repository.refresh() }

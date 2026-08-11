@@ -7,6 +7,7 @@ interface AppRepository {
     val state: Flow<AppState>
     suspend fun login(email: String, password: String): Result<Account>
     suspend fun register(email: String, password: String): Result<Account>
+    suspend fun changePassword(currentPassword: String, newPassword: String): Result<Unit>
     suspend fun sendPasswordReset(email: String): Result<Unit>
     suspend fun logout()
     suspend fun refresh()

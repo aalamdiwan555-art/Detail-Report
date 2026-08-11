@@ -2,6 +2,7 @@ package com.ultra.autodetector.data
 
 import android.content.Context
 import android.net.Uri
+import android.util.Patterns
 import com.ultra.autodetector.data.local.LocalDatabase
 import com.ultra.autodetector.data.local.LocalUserRecord
 import java.io.File
@@ -29,9 +30,7 @@ class LocalDatabaseRepository(context: Context) : AppRepository {
     override val state: StateFlow<AppState> = _state.asStateFlow()
 
     override suspend fun login(email: String, password: String): Result<Account> = runCatching {
-        require(email.isNotBlank() && password.length >= 6) {
-            "Enter a valid email and a password with at least 6 characters."
-        }
+        validateCredentials(email, password)
 
         val record = withContext(Dispatchers.IO) {
             val normalizedEmail = email.trim()
@@ -47,10 +46,9 @@ class LocalDatabaseRepository(context: Context) : AppRepository {
                     admin
                 }
                 existing != null -> {
-                    require(
-                        existing.passwordHash.isBlank() ||
-                            existing.passwordHash == hashPassword(password),
-                    ) { "Incorrect email or password." }
+                    require(existing.passwordHash == hashPassword(password)) {
+                        "Incorrect email or password."
+                    }
                     existing
                 }
                 else -> {
@@ -72,12 +70,12 @@ class LocalDatabaseRepository(context: Context) : AppRepository {
         val account = record.toAccount()
         _state.value = loadState(account).copy(message = "Welcome back")
         account
+    }.onFailure { error ->
+        _state.value = _state.value.copy(message = error.message ?: "Unable to sign in.")
     }
 
     override suspend fun register(email: String, password: String): Result<Account> = runCatching {
-        require(email.isNotBlank() && password.length >= 6) {
-            "Use a valid email and a password with at least 6 characters."
-        }
+        validateCredentials(email, password)
 
         val account = withContext(Dispatchers.IO) {
             val normalizedEmail = email.trim()
@@ -98,11 +96,40 @@ class LocalDatabaseRepository(context: Context) : AppRepository {
         }
         _state.value = loadState(account).copy(message = "Account created. Waiting for approval.")
         account
+    }.onFailure { error ->
+        _state.value = _state.value.copy(message = error.message ?: "Unable to create account.")
+    }
+
+    override suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+    ): Result<Unit> = runCatching {
+        require(newPassword.length >= MIN_PASSWORD_LENGTH) {
+            "New password must be at least $MIN_PASSWORD_LENGTH characters."
+        }
+        require(currentPassword != newPassword) {
+            "New password must be different from the current password."
+        }
+        val email = database.getSessionEmail()
+            ?: error("Sign in before changing your password.")
+        withContext(Dispatchers.IO) {
+            val user = database.findUserByEmail(email)
+                ?: error("Your local account could not be found.")
+            require(user.passwordHash == hashPassword(currentPassword)) {
+                "Current password is incorrect."
+            }
+            database.updateUserPassword(user.uid, hashPassword(newPassword))
+        }
+        _state.value = _state.value.copy(message = "Password updated")
+    }.onFailure { error ->
+        _state.value = _state.value.copy(message = error.message ?: "Unable to update password.")
     }
 
     override suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
-        require(email.isNotBlank()) { "Enter your email address first." }
+        require(isValidEmail(email)) { "Enter a valid email address first." }
         _state.value = _state.value.copy(message = "Local mode: password reset is not available without an email service.")
+    }.onFailure { error ->
+        _state.value = _state.value.copy(message = error.message ?: "Unable to start password reset.")
     }
 
     override suspend fun logout() {
@@ -249,8 +276,19 @@ class LocalDatabaseRepository(context: Context) : AppRepository {
             .digest(password.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
 
+    private fun validateCredentials(email: String, password: String) {
+        require(isValidEmail(email)) { "Enter a valid email address." }
+        require(password.length >= MIN_PASSWORD_LENGTH) {
+            "Password must be at least $MIN_PASSWORD_LENGTH characters."
+        }
+    }
+
+    private fun isValidEmail(email: String): Boolean =
+        Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
+
     companion object {
         private const val ADMIN_EMAIL = "admin@local.demo"
+        private const val MIN_PASSWORD_LENGTH = 8
         private const val DAY_MILLIS = 86_400_000L
         private const val THREE_DAYS_MILLIS = 3 * DAY_MILLIS
     }

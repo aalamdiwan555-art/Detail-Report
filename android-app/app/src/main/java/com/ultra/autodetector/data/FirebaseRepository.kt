@@ -2,6 +2,7 @@ package com.ultra.autodetector.data
 
 import android.content.Context
 import android.net.Uri
+import android.util.Patterns
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -26,6 +27,7 @@ class FirebaseRepository(private val context: Context) : AppRepository {
     override val state: Flow<AppState> = _state
 
     override suspend fun login(email: String, password: String): Result<Account> = runCatching {
+        validateCredentials(email, password)
         val firebaseUser = auth.signInWithEmailAndPassword(email, password).await().user
             ?: error("Authentication failed")
         val account = loadAccount(
@@ -40,6 +42,7 @@ class FirebaseRepository(private val context: Context) : AppRepository {
     }
 
     override suspend fun register(email: String, password: String): Result<Account> = runCatching {
+        validateCredentials(email, password)
         val firebaseUser = auth.createUserWithEmailAndPassword(email, password).await().user
             ?: error("Registration failed")
         val account = Account(firebaseUser.uid, email, status = AccountStatus.PENDING)
@@ -56,8 +59,27 @@ class FirebaseRepository(private val context: Context) : AppRepository {
         account
     }
 
+    override suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+    ): Result<Unit> = runCatching {
+        require(newPassword.length >= MIN_PASSWORD_LENGTH) {
+            "New password must be at least $MIN_PASSWORD_LENGTH characters."
+        }
+        require(currentPassword != newPassword) {
+            "New password must be different from the current password."
+        }
+        val user = auth.currentUser ?: error("Sign in before changing your password.")
+        val email = user.email ?: error("Your account has no email address.")
+        val credential = com.google.firebase.auth.EmailAuthProvider
+            .getCredential(email, currentPassword)
+        user.reauthenticate(credential).await()
+        user.updatePassword(newPassword).await()
+        _state.value = _state.value.copy(message = "Password updated")
+    }
+
     override suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
-        require(email.isNotBlank()) { "Enter your email address first." }
+        require(isValidEmail(email)) { "Enter a valid email address first." }
         auth.sendPasswordResetEmail(email.trim()).await()
         _state.value = _state.value.copy(message = "If that account exists, a reset email is on its way.")
     }
@@ -229,7 +251,18 @@ class FirebaseRepository(private val context: Context) : AppRepository {
             )
         }
 
+    private fun validateCredentials(email: String, password: String) {
+        require(isValidEmail(email)) { "Enter a valid email address." }
+        require(password.length >= MIN_PASSWORD_LENGTH) {
+            "Password must be at least $MIN_PASSWORD_LENGTH characters."
+        }
+    }
+
+    private fun isValidEmail(email: String): Boolean =
+        Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
+
     companion object {
+        private const val MIN_PASSWORD_LENGTH = 8
         private fun addDaysWithoutOverflow(baseMillis: Long, days: Int): Long {
             require(days > 0) { "License duration must be positive." }
             val increment = days.toLong() * 86_400_000L

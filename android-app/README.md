@@ -27,8 +27,9 @@ and is not a replacement for a trusted production server.
 
 Demo accounts:
 
-- Regular user: any valid email plus a six-character password.
+- Regular user: any valid email plus a password with at least eight characters.
 - Administrator: `admin@local.demo` / `UltraAdmin!26`.
+- Seeded operator account: `active@local.demo` / `ActiveUser!26`.
 
 The local administrator credential is fixed and development-only. It must not
 be used as production authentication.
