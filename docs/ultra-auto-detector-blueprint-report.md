@@ -881,6 +881,72 @@ Next safe step:
 - 
 ```
 
+### Checkpoint 1 — Native Android implementation
+
+**Date:** 2026-08-11  
+**Scope:** Build the native Kotlin Android application foundation and connect the core product flows.
+
+**Completed:**
+
+- Created a dedicated Android project under `android-app/`.
+- Added Kotlin, Android Gradle, Jetpack Compose, Firebase, coroutines, and secure local development configuration.
+- Added offline local demo mode so the app does not require production credentials to run.
+- Added Firebase repository boundaries for Auth, Firestore, and Storage.
+- Added account statuses, license state, template data, permission state, and detector state.
+- Added authentication and registration screens.
+- Added subscription status, renewal handoff, permissions, detector controls, template list, and settings/privacy disclosure.
+- Added administrator controls for license actions and template upload/delete.
+- Added foreground MediaProjection capture lifecycle.
+- Added accessibility gesture service and draggable floating widget with pause/stop controls.
+- Added secure Firestore and Storage rules using trusted admin claims rather than email/password checks.
+- Added Android project README and Gradle wrapper generation support.
+- Added `.gitignore` entries for native Android outputs.
+
+**Files created or changed:**
+
+- `android-app/settings.gradle.kts`
+- `android-app/build.gradle.kts`
+- `android-app/gradle.properties`
+- `android-app/app/build.gradle.kts`
+- `android-app/app/src/main/AndroidManifest.xml`
+- `android-app/app/src/main/java/com/ultra/autodetector/**`
+- `android-app/app/src/main/res/**`
+- `android-app/README.md`
+- `firebase/firestore.rules`
+- `firebase/storage.rules`
+- `.gitignore`
+
+**Dependencies added:** AndroidX Compose, lifecycle, DataStore/security support, Kotlin coroutines/serialization, Firebase Auth/Firestore/Storage, and Material components.
+
+**Secrets accessed or changed:** None. The administrator password from the uploaded prompt was not copied or used.
+
+**External services accessed:** No Firebase project was connected. No Telegram message was sent. No cloud data was read or changed.
+
+**Tests and verification:**
+
+- Java toolchain installed and available.
+- Gradle installed and project configuration recognized.
+- `gradle tasks --all` completed successfully.
+- `gradle assembleDebug` reached dependency resolution but could not proceed because this environment has no Android SDK or `ANDROID_HOME`.
+- Source-level corrections were made for activity result constants, nullable account access, and Firestore template serialization.
+
+**Known issues:**
+
+- An Android SDK-enabled environment is required to produce an APK.
+- OpenCV native template matching is isolated behind `DetectionService.FrameAnalyzer`; the capture lifecycle is implemented, but the OpenCV native dependency and actual bitmap/matrix matcher still need to be selected and wired.
+- Firebase production mode requires a project-specific `google-services.json` and trusted Firebase custom admin claims.
+- Firebase template listing and admin user listing need live snapshot flows for production parity.
+
+**Security or privacy impact:**
+
+- No embedded production credentials.
+- Rules use a trusted `admin` custom claim.
+- User-visible disclosure explains screen capture and gesture behavior.
+- Detection starts only after explicit permission and start actions.
+- The app does not implement anti-bot evasion or hidden target-app discovery.
+
+**Next safe step:** Build the APK in Android Studio or an Android-SDK-enabled environment, then wire a selected OpenCV distribution and Firebase project configuration; run emulator tests for permissions, service lifecycle, rules, and template matching.
+
 ---
 
 ## 16. Final assessment
@@ -896,4 +962,4 @@ The correct next step is **not** to copy the snippets unchanged. The correct nex
 5. Create a dedicated Android project foundation.
 6. Implement and test the system in the phased order above.
 
-No application behavior has been enabled by this report.
+The native Android foundation and core user flows are now implemented in `android-app/`. Cloud configuration, the final OpenCV distribution, APK compilation, and device/emulator verification remain environment-dependent follow-up work.
