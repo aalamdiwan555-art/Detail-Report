@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "PNtp2y_k-Bid5Of4Lw6r7"
+uri = "file://docs/ultra-auto-detector-blueprint-report.md"
+type = "text"
+title = "Ultra AutoDetector Blueprint Report"
+description = "Detailed consolidation of all eight uploaded prompt parts, implementation readiness findings, security risks, verification checklist, and checkpoint history."

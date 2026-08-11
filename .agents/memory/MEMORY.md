@@ -1,0 +1,1 @@
+- [Ultra AutoDetector blueprint](ultra-auto-detector-blueprint.md) — the uploaded Android blueprint needs security review and a dedicated Android project before implementation.
