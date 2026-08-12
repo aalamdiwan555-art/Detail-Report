@@ -53,6 +53,7 @@ The app currently uses local database mode:
 - Administrator authorization is local-development-only; the app never embeds the exposed prompt password.
 - Local database mode keeps the UI usable without cloud credentials.
 - Screen capture and overlay services start only after explicit user actions and permissions.
+- The accessibility service also matches the configured multilingual approval labels while detection is running.
 - MediaProjection authorization is held in memory for the current session instead of being serialized as a reusable token.
 - License renewals extend from the later of the current expiration and now; admin actions are written to an immutable audit collection.
 

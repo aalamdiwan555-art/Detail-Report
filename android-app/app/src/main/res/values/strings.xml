@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Ultra AutoDetector</string>
-    <string name="accessibility_service_description">User-controlled gesture service for Ultra AutoDetector. Gestures are only dispatched after the user starts detection.</string>
+    <string name="accessibility_service_description">User-controlled gesture and configured multilingual text-target service for Ultra AutoDetector. Gestures are only dispatched after the user starts detection.</string>
     <string name="accessibility_service_label">Ultra AutoDetector Gesture Service</string>
     <string name="detection_notification_channel">Detection service</string>
     <string name="detection_notification_title">Detection is running</string>

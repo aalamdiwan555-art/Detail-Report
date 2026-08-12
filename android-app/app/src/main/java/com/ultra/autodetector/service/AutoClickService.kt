@@ -10,6 +10,7 @@ import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
+import com.ultra.autodetector.opencv.TextTargetDetector
 import com.ultra.autodetector.util.Constants
 import com.ultra.autodetector.util.HumanizationEngine
 
@@ -27,7 +28,15 @@ class AutoClickService : AccessibilityService() {
         }
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null || !DetectionService.isRunning || DetectionService.isPaused) return
+        if (event.packageName?.toString() == packageName) return
+        if (!HumanizationEngine.isCooldownPassed()) return
+
+        val match = TextTargetDetector.find(rootInActiveWindow) ?: return
+        performUserRequestedClick(match.centerX, match.centerY)
+        HumanizationEngine.recordClick()
+    }
     override fun onInterrupt() = Unit
 
     fun performUserRequestedClick(x: Float, y: Float) {

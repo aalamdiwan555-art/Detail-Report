@@ -13,6 +13,9 @@ Native Kotlin Android implementation of the local, self-hosted blueprint.
 - Explicit AccessibilityService, overlay, and MediaProjection permission flow.
 - Foreground screen capture, bounded normalized-correlation bitmap matching, and
   user-requested accessibility gestures.
+- Configured multilingual approval-text detection through the accessibility
+  tree, including English, Hindi, Gujarati, Marathi, Bengali, Tamil, Telugu,
+  Kannada, Malayalam, Punjabi, Urdu, and Odia variants.
 - Draggable floating pause/stop control.
 
 ## Local mode
