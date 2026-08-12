@@ -7,9 +7,12 @@ import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
+import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
+import com.ultra.autodetector.R
 import com.ultra.autodetector.auth.AuthRepository
 import com.ultra.autodetector.databinding.ActivityMainBinding
 import com.ultra.autodetector.service.DetectionService
@@ -36,61 +39,22 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Permission rows are included layouts - find inside
-        val accRow = binding.root.findViewById<View>(com.ultra.autodetector.R.id.permission_row_accessibility_root 
-            ?: -1) // fallback
-        // Simple click handling via root includes
-        binding.root.findViewById<View>(com.ultra.autodetector.R.id.btnAccessibility)?.setOnClickListener {
+        binding.root.findViewById<View>(R.id.btn_accessibility)?.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
-        // Also handle include clicks by clicking whole cards
-        binding.root.setOnClickListener { }
-
-        // Since includes don't have direct binding IDs, we handle clicks on the include roots
-        // Best: click listeners for permissions
-        binding.root.findViewById<View>(com.ultra.autodetector.R.id.btn_accessibility_card)?.setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
-        binding.root.findViewById<View>(com.ultra.autodetector.R.id.btn_overlay_card)?.setOnClickListener {
+        binding.root.findViewById<View>(R.id.btn_overlay)?.setOnClickListener {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
         }
-        binding.root.findViewById<View>(com.ultra.autodetector.R.id.btn_capture_card)?.setOnClickListener {
-            requestCapture()
+        binding.root.findViewById<View>(R.id.btn_screen_capture)?.setOnClickListener {
+            val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            projectionLauncher.launch(manager.createScreenCaptureIntent())
         }
 
-        // Direct IDs from your XML
-        binding.btnLogout.setOnClickListener {
-            auth.logout()
-            startActivity(Intent(this, AuthActivity::class.java))
-            finish()
-        }
-        binding.btnCloseNotice.setOnClickListener {
-            binding.noticeCard.visibility = View.GONE
-        }
-        binding.btnStartStop.setOnClickListener {
-            if (isRunning) stopDetection() else startDetection()
-        }
-        binding.btnPause.setOnClickListener {
-            isRunning = false
-            binding.detectorStatus.text = "Paused"
-            refreshUi()
-        }
-        binding.btnAdmin.setOnClickListener {
-            startActivity(Intent(this, AdminActivity::class.java))
-        }
-        binding.btnRenew.setOnClickListener {
-            // open telegram
-        }
-
-        // For included permission rows, set click on their root views
-        try {
-            binding.root.findViewById<View>(com.ultra.autodetector.R.id.permission_row_accessibility_root)?.setOnClickListener { 
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) 
-            }
-        } catch (e: Exception) {}
-        
-        // Fallback: clicking anywhere on permission area
-        // We will also add click listeners after refresh
+        binding.btnLogout.setOnClickListener { auth.logout(); startActivity(Intent(this, AuthActivity::class.java)); finish() }
+        binding.btnCloseNotice.setOnClickListener { binding.noticeCard.visibility = View.GONE }
+        binding.btnStartStop.setOnClickListener { if (isRunning) stopDetection() else startDetection() }
+        binding.btnPause.setOnClickListener { stopDetection() }
+        binding.btnAdmin.setOnClickListener { startActivity(Intent(this, AdminActivity::class.java)) }
     }
 
     private fun requestCapture() {
@@ -98,83 +62,44 @@ class MainActivity : AppCompatActivity() {
         projectionLauncher.launch(manager.createScreenCaptureIntent())
     }
 
-    override fun onResume() {
-        super.onResume()
-        lifecycleScope.launch { refreshUi() }
-    }
+    override fun onResume() { super.onResume(); lifecycleScope.launch { refreshUi() } }
 
     private fun refreshUi() {
         val account = auth.currentUser()
-        if (account == null) {
-            startActivity(Intent(this, AuthActivity::class.java))
-            finish()
-            return
-        }
-
+        if (account == null) { startActivity(Intent(this, AuthActivity::class.java)); finish(); return }
         binding.accountEmail.text = account.email
         binding.avatarText.text = account.email.firstOrNull()?.uppercase() ?: "U"
 
-        val accessibilityEnabled = isAccessibilityEnabled()
+        val accessibilityEnabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)?.contains(packageName) == true
         val overlayEnabled = Settings.canDrawOverlays(this)
         val captureEnabled = projectionData != null || isRunning
 
-        // Update status in included rows via findViewById
-        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.accessibilityStatus)?.text = if (accessibilityEnabled) "✓ Granted" else "Tap to Grant"
-        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.overlayStatus)?.text = if (overlayEnabled) "✓ Granted" else "Tap to Grant"
-        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.captureStatus)?.text = if (captureEnabled) "✓ Ready" else "Tap to Grant"
-
-        // Also try snake_case IDs
-        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.accessibility_status)?.text = if (accessibilityEnabled) "✓ Granted" else "Tap to Grant"
-        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.overlay_status)?.text = if (overlayEnabled) "✓ Granted" else "Tap to Grant"
-        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.capture_status)?.text = if (captureEnabled) "✓ Ready" else "Tap to Grant"
+        binding.root.findViewById<TextView>(R.id.accessibility_status)?.text = if (accessibilityEnabled) "✓ Granted" else "Not ready"
+        binding.root.findViewById<TextView>(R.id.overlay_status)?.text = if (overlayEnabled) "✓ Granted" else "Not ready"
+        binding.root.findViewById<TextView>(R.id.capture_status)?.text = if (captureEnabled) "✓ Ready" else "Not ready"
+        binding.root.findViewById<MaterialButton>(R.id.btn_accessibility)?.text = if (accessibilityEnabled) "Granted" else "Grant"
+        binding.root.findViewById<MaterialButton>(R.id.btn_overlay)?.text = if (overlayEnabled) "Granted" else "Grant"
+        binding.root.findViewById<MaterialButton>(R.id.btn_screen_capture)?.text = if (captureEnabled) "Ready" else "Grant"
 
         val hasLicense = auth.hasActiveLicense()
-        binding.detectorStatus.text = when {
-            isRunning -> "● Running"
-            hasLicense -> "Ready to Start"
-            else -> "License Expired"
-        }
-
-        binding.subscriptionTitle.text = if (account.isAdmin) "Administrator Access" else if (hasLicense) "Premium Active" else "Trial Expired"
+        binding.detectorStatus.text = if (isRunning) "● Running" else if (hasLicense) "Ready to Start" else "License Expired"
+        binding.subscriptionTitle.text = if (account.isAdmin) "Administrator" else if (hasLicense) "Premium Active" else "Trial Expired"
         binding.subscriptionDetails.text = auth.remainingLabel()
         binding.btnAdmin.visibility = if (account.isAdmin) View.VISIBLE else View.GONE
         binding.btnRenew.visibility = if (!account.isAdmin && !hasLicense) View.VISIBLE else View.GONE
-
-        val canStart = isRunning || (hasLicense && accessibilityEnabled && overlayEnabled)
-        binding.btnStartStop.isEnabled = canStart
+        binding.btnStartStop.isEnabled = isRunning || (hasLicense && accessibilityEnabled && overlayEnabled)
         binding.btnStartStop.text = if (isRunning) "STOP DETECTION" else "START DETECTION"
         binding.btnPause.visibility = if (isRunning) View.VISIBLE else View.GONE
-
-        binding.permissionHint.text = if (canStart) "All permissions ready" else "Grant all permissions to start"
-    }
-
-    private fun isAccessibilityEnabled(): Boolean {
-        val prefString = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
-        return prefString?.contains(packageName) == true
     }
 
     private fun startDetection() {
-        if (projectionData == null) {
-            requestCapture()
-            return
-        }
-        val data = projectionData!!
-        val intent = Intent(this, DetectionService::class.java).apply {
-            action = "START"
-            putExtra("data", data)
-        }
-        startForegroundService(intent)
+        if (projectionData == null) { requestCapture(); return }
+        startForegroundService(Intent(this, DetectionService::class.java).apply { action = "START"; putExtra("data", projectionData) })
         startService(Intent(this, FloatingWidgetService::class.java))
-        isRunning = true
-        binding.consoleText.text = "> Detection service initialized...\n> Service running"
-        refreshUi()
+        isRunning = true; refreshUi()
     }
-
     private fun stopDetection() {
-        sendBroadcast(Intent("STOP_DETECTION"))
-        stopService(Intent(this, FloatingWidgetService::class.java))
-        isRunning = false
-        binding.consoleText.text = "> Local console ready"
-        refreshUi()
+        sendBroadcast(Intent("STOP_DETECTION")); stopService(Intent(this, FloatingWidgetService::class.java))
+        isRunning = false; refreshUi()
     }
 }
