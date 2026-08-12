@@ -239,19 +239,23 @@ class AdminActivity : AppCompatActivity() {
         }
     }
 
+    // --- FIXED FUNCTION - YAHI BUG THA ---
     private fun showTemplateDetailsDialog(uri: android.net.Uri) {
         val nameInput = com.google.android.material.textfield.TextInputEditText(this).apply {
             hint = "Template name"
-            singleLine = true
+            isSingleLine = true
+            maxLines = 1
         }
         val descriptionInput = com.google.android.material.textfield.TextInputEditText(this).apply {
             hint = "Description (optional)"
-            setTextColor(Color.WHITE)
+            setTextColor(Color.BLACK)
+            isSingleLine = false
             minLines = 2
+            maxLines = 3
         }
         val container = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(48, 0, 48, 0)
+            setPadding(48, 24, 48, 0)
             addView(
                 nameInput,
                 android.widget.LinearLayout.LayoutParams(
