@@ -6,14 +6,18 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
-import android.text.TextUtils
+import android.view.View
+import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
+import com.ultra.autodetector.R
 import com.ultra.autodetector.auth.AuthRepository
 import com.ultra.autodetector.databinding.ActivityMainBinding
 import com.ultra.autodetector.service.DetectionService
 import com.ultra.autodetector.service.FloatingWidgetService
+import com.ultra.autodetector.ui.auth.AuthActivity
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -34,58 +38,70 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.btnAccessibilityCard.setOnClickListener {
+        // Tere XMLs me ye 3 IDs hain
+        binding.root.findViewById<View>(R.id.btn_accessibility)?.setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
-        binding.btnOverlayCard.setOnClickListener {
+        binding.root.findViewById<View>(R.id.btn_overlay)?.setOnClickListener {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
         }
-        binding.btnScreenCaptureCard.setOnClickListener {
+        binding.root.findViewById<View>(R.id.btn_screen_capture)?.setOnClickListener {
             val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             projectionLauncher.launch(manager.createScreenCaptureIntent())
         }
+
         binding.btnStartStop.setOnClickListener {
             if (isRunning) stopDetection() else startDetection()
         }
         binding.btnLogout.setOnClickListener {
             auth.logout()
+            startActivity(Intent(this, AuthActivity::class.java))
             finish()
         }
+        binding.btnCloseNotice?.setOnClickListener { binding.noticeCard.visibility = View.GONE }
+        binding.btnPause?.setOnClickListener { stopDetection() }
+        binding.btnAdmin?.setOnClickListener { startActivity(Intent(this, com.ultra.autodetector.ui.admin.AdminActivity::class.java)) }
     }
 
     override fun onResume() {
         super.onResume()
-        lifecycleScope.launch {
-            refreshUi()
-        }
+        lifecycleScope.launch { refreshUi() }
     }
 
     private fun refreshUi() {
         val account = auth.currentUser()
         if (account == null) {
-            startActivity(Intent(this, com.ultra.autodetector.ui.auth.AuthActivity::class.java))
+            startActivity(Intent(this, AuthActivity::class.java))
             finish()
             return
         }
+
+        binding.accountEmail.text = account.email
+        binding.avatarText.text = account.email.firstOrNull()?.uppercase() ?: "U"
 
         val accessibilityEnabled = isAccessibilityEnabled()
         val overlayEnabled = Settings.canDrawOverlays(this)
         val captureEnabled = projectionData != null || isRunning
 
-        binding.accessibilityStatus.text = if (accessibilityEnabled) "✓ Granted" else "Grant"
-        binding.overlayStatus.text = if (overlayEnabled) "✓ Granted" else "Grant"
-        binding.captureStatus.text = if (captureEnabled) "✓ Ready" else "Grant"
+        // Status TextViews update - tere XML ke IDs
+        binding.root.findViewById<TextView>(R.id.accessibility_status)?.text = if (accessibilityEnabled) "✓ Granted" else "Not ready"
+        binding.root.findViewById<TextView>(R.id.overlay_status)?.text = if (overlayEnabled) "✓ Granted" else "Not ready"
+        binding.root.findViewById<TextView>(R.id.capture_status)?.text = if (captureEnabled) "✓ Ready" else "Not ready"
+
+        binding.root.findViewById<MaterialButton>(R.id.btn_accessibility)?.text = if (accessibilityEnabled) "Granted" else "Grant"
+        binding.root.findViewById<MaterialButton>(R.id.btn_overlay)?.text = if (overlayEnabled) "Granted" else "Grant"
+        binding.root.findViewById<MaterialButton>(R.id.btn_screen_capture)?.text = if (captureEnabled) "Ready" else "Grant"
 
         val hasLicense = auth.hasActiveLicense()
         binding.detectorStatus.text = when {
-            isRunning -> "Running..."
-            hasLicense -> "Ready"
+            isRunning -> "● Running"
+            hasLicense -> "Ready to Start"
             else -> "License Expired"
         }
-        
-        val canStart = isRunning || (hasLicense && accessibilityEnabled && overlayEnabled && captureEnabled)
+
+        val canStart = isRunning || (hasLicense && accessibilityEnabled && overlayEnabled)
         binding.btnStartStop.isEnabled = canStart
-        binding.btnStartStop.text = if (isRunning) "STOP" else "START"
+        binding.btnStartStop.text = if (isRunning) "STOP DETECTION" else "START DETECTION"
     }
 
     private fun isAccessibilityEnabled(): Boolean {
@@ -95,17 +111,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun startDetection() {
         if (projectionData == null) {
-            binding.btnScreenCaptureCard.performClick()
+            binding.root.findViewById<View>(R.id.btn_screen_capture)?.performClick()
             return
         }
         val data = projectionData!!
-        val intent = Intent(this, DetectionService::class.java).apply {
-            action = "START"
-            putExtra("data", data)
-        }
-        startForegroundService(intent)
+        startForegroundService(Intent(this, DetectionService::class.java).apply { action = "START"; putExtra("data", data) })
         startService(Intent(this, FloatingWidgetService::class.java))
         isRunning = true
+        binding.consoleText.text = "> Detection initialized..."
         refreshUi()
     }
 
@@ -113,6 +126,7 @@ class MainActivity : AppCompatActivity() {
         sendBroadcast(Intent("STOP_DETECTION"))
         stopService(Intent(this, FloatingWidgetService::class.java))
         isRunning = false
+        binding.consoleText.text = "> Local console ready"
         refreshUi()
     }
 }
