@@ -11,7 +11,7 @@ android {
     defaultConfig {
         applicationId = "com.ultra.autodetector"
         minSdk = 26
-    targetSdk = 34
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
     }
@@ -45,6 +45,10 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
         resources.excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
     }
+}
+
+kapt {
+    correctErrorTypes = true
 }
 
 dependencies {
