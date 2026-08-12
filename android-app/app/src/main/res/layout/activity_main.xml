@@ -1,105 +1,44 @@
-package com.ultra.autodetector.ui.main
-
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import android.media.projection.MediaProjectionManager
-import android.os.Bundle
-import android.provider.Settings
-import android.view.View
-import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import com.google.android.material.button.MaterialButton
-import com.ultra.autodetector.R
-import com.ultra.autodetector.auth.AuthRepository
-import com.ultra.autodetector.databinding.ActivityMainBinding
-import com.ultra.autodetector.service.DetectionService
-import com.ultra.autodetector.service.FloatingWidgetService
-import com.ultra.autodetector.ui.admin.AdminActivity
-import com.ultra.autodetector.ui.auth.AuthActivity
-import kotlinx.coroutines.launch
-
-class MainActivity : AppCompatActivity() {
-    private lateinit var binding: ActivityMainBinding
-    private val auth by lazy { AuthRepository(this) }
-    private var projectionData: Intent? = null
-    private var isRunning = false
-
-    private val projectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            projectionData = result.data
-            refreshUi()
-        }
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        binding.root.findViewById<View>(R.id.btn_accessibility)?.setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
-        binding.root.findViewById<View>(R.id.btn_overlay)?.setOnClickListener {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
-        }
-        binding.root.findViewById<View>(R.id.btn_screen_capture)?.setOnClickListener {
-            val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            projectionLauncher.launch(manager.createScreenCaptureIntent())
-        }
-
-        binding.btnLogout.setOnClickListener { auth.logout(); startActivity(Intent(this, AuthActivity::class.java)); finish() }
-        binding.btnCloseNotice.setOnClickListener { binding.noticeCard.visibility = View.GONE }
-        binding.btnStartStop.setOnClickListener { if (isRunning) stopDetection() else startDetection() }
-        binding.btnPause.setOnClickListener { stopDetection() }
-        binding.btnAdmin.setOnClickListener { startActivity(Intent(this, AdminActivity::class.java)) }
-    }
-
-    private fun requestCapture() {
-        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        projectionLauncher.launch(manager.createScreenCaptureIntent())
-    }
-
-    override fun onResume() { super.onResume(); lifecycleScope.launch { refreshUi() } }
-
-    private fun refreshUi() {
-        val account = auth.currentUser()
-        if (account == null) { startActivity(Intent(this, AuthActivity::class.java)); finish(); return }
-        binding.accountEmail.text = account.email
-        binding.avatarText.text = account.email.firstOrNull()?.uppercase() ?: "U"
-
-        val accessibilityEnabled = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)?.contains(packageName) == true
-        val overlayEnabled = Settings.canDrawOverlays(this)
-        val captureEnabled = projectionData != null || isRunning
-
-        binding.root.findViewById<TextView>(R.id.accessibility_status)?.text = if (accessibilityEnabled) "✓ Granted" else "Not ready"
-        binding.root.findViewById<TextView>(R.id.overlay_status)?.text = if (overlayEnabled) "✓ Granted" else "Not ready"
-        binding.root.findViewById<TextView>(R.id.capture_status)?.text = if (captureEnabled) "✓ Ready" else "Not ready"
-        binding.root.findViewById<MaterialButton>(R.id.btn_accessibility)?.text = if (accessibilityEnabled) "Granted" else "Grant"
-        binding.root.findViewById<MaterialButton>(R.id.btn_overlay)?.text = if (overlayEnabled) "Granted" else "Grant"
-        binding.root.findViewById<MaterialButton>(R.id.btn_screen_capture)?.text = if (captureEnabled) "Ready" else "Grant"
-
-        val hasLicense = auth.hasActiveLicense()
-        binding.detectorStatus.text = if (isRunning) "● Running" else if (hasLicense) "Ready to Start" else "License Expired"
-        binding.subscriptionTitle.text = if (account.isAdmin) "Administrator" else if (hasLicense) "Premium Active" else "Trial Expired"
-        binding.subscriptionDetails.text = auth.remainingLabel()
-        binding.btnAdmin.visibility = if (account.isAdmin) View.VISIBLE else View.GONE
-        binding.btnRenew.visibility = if (!account.isAdmin && !hasLicense) View.VISIBLE else View.GONE
-        binding.btnStartStop.isEnabled = isRunning || (hasLicense && accessibilityEnabled && overlayEnabled)
-        binding.btnStartStop.text = if (isRunning) "STOP DETECTION" else "START DETECTION"
-        binding.btnPause.visibility = if (isRunning) View.VISIBLE else View.GONE
-    }
-
-    private fun startDetection() {
-        if (projectionData == null) { requestCapture(); return }
-        startForegroundService(Intent(this, DetectionService::class.java).apply { action = "START"; putExtra("data", projectionData) })
-        startService(Intent(this, FloatingWidgetService::class.java))
-        isRunning = true; refreshUi()
-    }
-    private fun stopDetection() {
-        sendBroadcast(Intent("STOP_DETECTION")); stopService(Intent(this, FloatingWidgetService::class.java))
-        isRunning = false; refreshUi()
-    }
-}
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/ink" android:orientation="vertical">
+<ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+<TextView android:id="@+id/avatar_text" android:layout_width="48dp" android:layout_height="48dp" android:background="@drawable/bg_glass_card" android:gravity="center" android:text="U" android:textColor="@android:color/white" android:textSize="18sp" android:textStyle="bold" />
+<LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="12dp" android:orientation="vertical">
+<TextView android:id="@+id/account_email" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="user@example.com" android:textColor="@android:color/white" android:textSize="14sp" android:textStyle="bold" />
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="LOCAL MODE" android:textColor="@color/primary" android:textSize="10sp" />
+</LinearLayout>
+<com.google.android.material.button.MaterialButton android:id="@+id/btn_logout" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Logout" android:textColor="@color/error" />
+</LinearLayout>
+<com.google.android.material.card.MaterialCardView android:id="@+id/notice_card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:visibility="gone" app:cardBackgroundColor="@color/card" app:cardCornerRadius="12dp">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp">
+<TextView android:id="@+id/notice_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@android:color/white" />
+<com.google.android.material.button.MaterialButton android:id="@+id/btn_close_notice" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Close" />
+</LinearLayout>
+</com.google.android.material.card.MaterialCardView>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="SUBSCRIPTION" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_glass_card" android:orientation="vertical" android:padding="16dp">
+<TextView android:id="@+id/subscription_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Premium Active" android:textColor="@android:color/white" android:textSize="16sp" android:textStyle="bold" />
+<TextView android:id="@+id/subscription_details" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="30 days" android:textColor="@color/muted" />
+<ProgressBar android:id="@+id/subscription_progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" />
+<com.google.android.material.button.MaterialButton android:id="@+id/btn_renew" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Renew" android:visibility="gone" />
+</LinearLayout>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="PERMISSIONS" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
+<TextView android:id="@+id/permission_hint" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Grant all permissions" android:textColor="@color/muted" android:textSize="12sp" />
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:orientation="horizontal">
+<include layout="@layout/permission_row_accessibility" />
+<include layout="@layout/permission_row_overlay" />
+</LinearLayout>
+<include layout="@layout/permission_row_capture" />
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="DETECTOR" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_glass_card" android:orientation="vertical" android:padding="16dp">
+<TextView android:id="@+id/detector_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ready" android:textColor="@android:color/white" android:textSize="14sp" android:textStyle="bold" />
+<TextView android:id="@+id/detector_error" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/error" android:visibility="gone" />
+<com.google.android.material.button.MaterialButton android:id="@+id/btn_start_stop" android:layout_width="match_parent" android:layout_height="56dp" android:layout_marginTop="16dp" android:text="START DETECTION" app:cornerRadius="16dp" />
+<com.google.android.material.button.MaterialButton android:id="@+id/btn_pause" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="PAUSE" android:visibility="gone" />
+</LinearLayout>
+<TextView android:id="@+id/console_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:background="@drawable/bg_glass_card" android:padding="12dp" android:text="> Local console ready" android:textColor="@color/muted" android:textSize="12sp" />
+<com.google.android.material.button.MaterialButton android:id="@+id/btn_admin" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="ADMIN PANEL" android:visibility="gone" />
+</LinearLayout>
+</ScrollView>
+</LinearLayout>
