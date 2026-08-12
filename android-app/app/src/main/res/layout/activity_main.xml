@@ -1,257 +1,180 @@
-<?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/ink"
-    android:fillViewport="true">
+package com.ultra.autodetector.ui.main
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="18dp">
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
+import android.os.Bundle
+import android.provider.Settings
+import android.view.View
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.ultra.autodetector.auth.AuthRepository
+import com.ultra.autodetector.databinding.ActivityMainBinding
+import com.ultra.autodetector.service.DetectionService
+import com.ultra.autodetector.service.FloatingWidgetService
+import com.ultra.autodetector.ui.admin.AdminActivity
+import com.ultra.autodetector.ui.auth.AuthActivity
+import kotlinx.coroutines.launch
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical">
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="ULTRA"
-                    android:textColor="@color/primary"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.28" />
-                <TextView
-                    android:id="@+id/account_email"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:textColor="@android:color/white"
-                    android:textSize="14sp" />
-            </LinearLayout>
-            <TextView
-                android:id="@+id/avatar_text"
-                android:layout_width="42dp"
-                android:layout_height="42dp"
-                android:background="@drawable/bg_gradient_primary"
-                android:gravity="center"
-                android:textColor="@color/ink"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-            <ImageButton
-                android:id="@+id/btn_logout"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:layout_marginStart="6dp"
-                android:background="@android:color/transparent"
-                android:contentDescription="Logout"
-                android:src="@android:drawable/ic_lock_power_off"
-                android:tint="@color/muted" />
-        </LinearLayout>
+class MainActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityMainBinding
+    private val auth by lazy { AuthRepository(this) }
+    private var projectionData: Intent? = null
+    private var isRunning = false
 
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/notice_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:visibility="gone"
-            app:cardBackgroundColor="@color/warning_bg"
-            app:cardCornerRadius="16dp">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:padding="14dp">
-                <TextView
-                    android:id="@+id/notice_text"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:ellipsize="marquee"
-                    android:focusable="true"
-                    android:marqueeRepeatLimit="marquee_forever"
-                    android:scrollHorizontally="true"
-                    android:textColor="@color/ink"
-                    android:textStyle="bold" />
-                <ImageButton
-                    android:id="@+id/btn_close_notice"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:background="@android:color/transparent"
-                    android:contentDescription="Close notice"
-                    android:src="@android:drawable/ic_menu_close_clear_cancel"
-                    android:tint="@color/ink" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+    private val projectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            projectionData = result.data
+            refreshUi()
+        }
+    }
 
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardBackgroundColor="@color/card"
-            app:cardCornerRadius="20dp"
-            app:strokeColor="@color/stroke"
-            app:strokeWidth="1dp">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="18dp">
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="SUBSCRIPTION"
-                    android:textColor="@color/muted"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-                <TextView
-                    android:id="@+id/subscription_title"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:textColor="@color/primary"
-                    android:textSize="21sp"
-                    android:textStyle="bold" />
-                <TextView
-                    android:id="@+id/subscription_details"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:textColor="@android:color/white" />
-                <ProgressBar
-                    android:id="@+id/subscription_progress"
-                    style="?android:attr/progressBarStyleHorizontal"
-                    android:layout_width="match_parent"
-                    android:layout_height="6dp"
-                    android:layout_marginTop="14dp"
-                    android:max="100"
-                    android:progressTint="@color/primary" />
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_renew"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Renew access"
-                    android:textColor="@color/primary" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="PERMISSIONS"
-            android:textColor="@color/primary"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-        <TextView
-            android:id="@+id/permission_hint"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:textColor="@color/muted"
-            android:textSize="12sp" />
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="9dp"
-            android:orientation="horizontal">
-            <include layout="@layout/permission_row_accessibility" />
-            <include layout="@layout/permission_row_overlay" />
-        </LinearLayout>
-        <include layout="@layout/permission_row_capture" />
+        // Permission rows are included layouts - find inside
+        val accRow = binding.root.findViewById<View>(com.ultra.autodetector.R.id.permission_row_accessibility_root 
+            ?: -1) // fallback
+        // Simple click handling via root includes
+        binding.root.findViewById<View>(com.ultra.autodetector.R.id.btnAccessibility)?.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        // Also handle include clicks by clicking whole cards
+        binding.root.setOnClickListener { }
 
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardBackgroundColor="@color/card"
-            app:cardCornerRadius="20dp"
-            app:strokeColor="@color/stroke"
-            app:strokeWidth="1dp">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="18dp">
-                <TextView
-                    android:id="@+id/detector_status"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@android:color/white"
-                    android:textSize="20sp"
-                    android:textStyle="bold" />
-                <TextView
-                    android:id="@+id/detector_error"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:textColor="@color/error"
-                    android:visibility="gone" />
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp">
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_start_stop"
-                        android:layout_width="0dp"
-                        android:layout_height="56dp"
-                        android:layout_weight="1"
-                        android:text="START DETECTION"
-                        android:textColor="@color/ink"
-                        android:textStyle="bold"
-                        app:backgroundTint="@color/primary"
-                        app:cornerRadius="18dp" />
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_pause"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="56dp"
-                        android:layout_marginStart="8dp"
-                        android:layout_weight="0.58"
-                        android:text="PAUSE"
-                        android:textColor="@color/primary"
-                        android:visibility="gone"
-                        app:cornerRadius="18dp" />
-                </LinearLayout>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
+        // Since includes don't have direct binding IDs, we handle clicks on the include roots
+        // Best: click listeners for permissions
+        binding.root.findViewById<View>(com.ultra.autodetector.R.id.btn_accessibility_card)?.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        binding.root.findViewById<View>(com.ultra.autodetector.R.id.btn_overlay_card)?.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+        }
+        binding.root.findViewById<View>(com.ultra.autodetector.R.id.btn_capture_card)?.setOnClickListener {
+            requestCapture()
+        }
 
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            app:cardBackgroundColor="@color/console"
-            app:cardCornerRadius="20dp">
-            <TextView
-                android:id="@+id/console_text"
-                android:layout_width="match_parent"
-                android:layout_height="116dp"
-                android:fontFamily="monospace"
-                android:gravity="top|start"
-                android:padding="16dp"
-                android:text="› Local console ready"
-                android:textColor="@color/primary"
-                android:textSize="12sp" />
-        </com.google.android.material.card.MaterialCardView>
+        // Direct IDs from your XML
+        binding.btnLogout.setOnClickListener {
+            auth.logout()
+            startActivity(Intent(this, AuthActivity::class.java))
+            finish()
+        }
+        binding.btnCloseNotice.setOnClickListener {
+            binding.noticeCard.visibility = View.GONE
+        }
+        binding.btnStartStop.setOnClickListener {
+            if (isRunning) stopDetection() else startDetection()
+        }
+        binding.btnPause.setOnClickListener {
+            isRunning = false
+            binding.detectorStatus.text = "Paused"
+            refreshUi()
+        }
+        binding.btnAdmin.setOnClickListener {
+            startActivity(Intent(this, AdminActivity::class.java))
+        }
+        binding.btnRenew.setOnClickListener {
+            // open telegram
+        }
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_admin"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="OPEN ADMIN CONTROL"
-            android:textColor="@color/primary"
-            android:visibility="gone" />
-    </LinearLayout>
-</ScrollView>
+        // For included permission rows, set click on their root views
+        try {
+            binding.root.findViewById<View>(com.ultra.autodetector.R.id.permission_row_accessibility_root)?.setOnClickListener { 
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) 
+            }
+        } catch (e: Exception) {}
+        
+        // Fallback: clicking anywhere on permission area
+        // We will also add click listeners after refresh
+    }
+
+    private fun requestCapture() {
+        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionLauncher.launch(manager.createScreenCaptureIntent())
+    }
+
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch { refreshUi() }
+    }
+
+    private fun refreshUi() {
+        val account = auth.currentUser()
+        if (account == null) {
+            startActivity(Intent(this, AuthActivity::class.java))
+            finish()
+            return
+        }
+
+        binding.accountEmail.text = account.email
+        binding.avatarText.text = account.email.firstOrNull()?.uppercase() ?: "U"
+
+        val accessibilityEnabled = isAccessibilityEnabled()
+        val overlayEnabled = Settings.canDrawOverlays(this)
+        val captureEnabled = projectionData != null || isRunning
+
+        // Update status in included rows via findViewById
+        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.accessibilityStatus)?.text = if (accessibilityEnabled) "✓ Granted" else "Tap to Grant"
+        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.overlayStatus)?.text = if (overlayEnabled) "✓ Granted" else "Tap to Grant"
+        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.captureStatus)?.text = if (captureEnabled) "✓ Ready" else "Tap to Grant"
+
+        // Also try snake_case IDs
+        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.accessibility_status)?.text = if (accessibilityEnabled) "✓ Granted" else "Tap to Grant"
+        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.overlay_status)?.text = if (overlayEnabled) "✓ Granted" else "Tap to Grant"
+        binding.root.findViewById<android.widget.TextView>(com.ultra.autodetector.R.id.capture_status)?.text = if (captureEnabled) "✓ Ready" else "Tap to Grant"
+
+        val hasLicense = auth.hasActiveLicense()
+        binding.detectorStatus.text = when {
+            isRunning -> "● Running"
+            hasLicense -> "Ready to Start"
+            else -> "License Expired"
+        }
+
+        binding.subscriptionTitle.text = if (account.isAdmin) "Administrator Access" else if (hasLicense) "Premium Active" else "Trial Expired"
+        binding.subscriptionDetails.text = auth.remainingLabel()
+        binding.btnAdmin.visibility = if (account.isAdmin) View.VISIBLE else View.GONE
+        binding.btnRenew.visibility = if (!account.isAdmin && !hasLicense) View.VISIBLE else View.GONE
+
+        val canStart = isRunning || (hasLicense && accessibilityEnabled && overlayEnabled)
+        binding.btnStartStop.isEnabled = canStart
+        binding.btnStartStop.text = if (isRunning) "STOP DETECTION" else "START DETECTION"
+        binding.btnPause.visibility = if (isRunning) View.VISIBLE else View.GONE
+
+        binding.permissionHint.text = if (canStart) "All permissions ready" else "Grant all permissions to start"
+    }
+
+    private fun isAccessibilityEnabled(): Boolean {
+        val prefString = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        return prefString?.contains(packageName) == true
+    }
+
+    private fun startDetection() {
+        if (projectionData == null) {
+            requestCapture()
+            return
+        }
+        val data = projectionData!!
+        val intent = Intent(this, DetectionService::class.java).apply {
+            action = "START"
+            putExtra("data", data)
+        }
+        startForegroundService(intent)
+        startService(Intent(this, FloatingWidgetService::class.java))
+        isRunning = true
+        binding.consoleText.text = "> Detection service initialized...\n> Service running"
+        refreshUi()
+    }
+
+    private fun stopDetection() {
+        sendBroadcast(Intent("STOP_DETECTION"))
+        stopService(Intent(this, FloatingWidgetService::class.java))
+        isRunning = false
+        binding.consoleText.text = "> Local console ready"
+        refreshUi()
+    }
+}
