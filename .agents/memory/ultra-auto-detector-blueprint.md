@@ -14,3 +14,15 @@ The imported Android module should keep native computer-vision dependencies behi
 **Why:** The blueprint lists multiple possible OpenCV approaches and the available environment has no Android SDK; adding an arbitrary native artifact would make the project less reproducible and harder to verify.
 
 **How to apply:** Use the dependency-free bitmap matcher/capture boundary for local development, then replace only that adapter after the release build environment and OpenCV version are explicitly chosen.
+
+Administrator authorization must be provisioned at build time or through a
+trusted external mechanism; never copy exposed prompt credentials into Kotlin,
+Gradle, documentation, or a demo seed.
+
+**Why:** Client-side administrator constants are recoverable from an APK and
+the imported prompt included credential-like material that must be treated as
+compromised.
+
+**How to apply:** Keep the local Room authorization flow offline, but require a
+release build to provide administrator identity material through a protected
+provisioning path and disable admin access when it is absent.

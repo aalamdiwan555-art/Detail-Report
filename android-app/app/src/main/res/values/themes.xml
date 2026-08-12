@@ -3,11 +3,11 @@
     <style name="Theme.UltraAutoDetector" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:colorAccent">#56D6C8</item>
-        <item name="android:navigationBarColor">#08121B</item>
-        <item name="android:statusBarColor">#08121B</item>
+        <item name="android:colorAccent">@color/primary</item>
+        <item name="android:navigationBarColor">@color/ink</item>
+        <item name="android:statusBarColor">@color/ink</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="colorPrimary">@color/teal</item>
-        <item name="colorAccent">@color/teal</item>
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorAccent">@color/primary</item>
     </style>
 </resources>

@@ -4,6 +4,16 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+val configuredAdminEmail = providers.gradleProperty("ultraAdminEmail")
+    .orElse(providers.environmentVariable("ULTRA_ADMIN_EMAIL"))
+    .orElse("")
+val configuredAdminPasswordHash = providers.gradleProperty("ultraAdminPasswordHash")
+    .orElse(providers.environmentVariable("ULTRA_ADMIN_PASSWORD_HASH"))
+    .orElse("")
+
+fun quoteBuildConfig(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 android {
     namespace = "com.ultra.autodetector"
     compileSdk = 35
@@ -14,6 +24,8 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
+        buildConfigField("String", "ULTRA_ADMIN_EMAIL", quoteBuildConfig(configuredAdminEmail.get()))
+        buildConfigField("String", "ULTRA_ADMIN_PASSWORD_HASH", quoteBuildConfig(configuredAdminPasswordHash.get()))
     }
 
     buildTypes {
@@ -39,7 +51,10 @@ android {
         jvmTarget = "17"
     }
 
-    buildFeatures { viewBinding = true }
+    buildFeatures {
+        viewBinding = true
+        buildConfig = true
+    }
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -57,11 +72,15 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
     implementation("androidx.lifecycle:lifecycle-service:2.8.3")
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     kapt("androidx.room:room-compiler:2.6.1")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("com.airbnb.android:lottie:6.1.0")
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }

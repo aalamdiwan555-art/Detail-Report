@@ -5,129 +5,115 @@ import android.os.Build
 import android.util.Patterns
 import com.ultra.autodetector.data.local.AppDatabase
 import com.ultra.autodetector.data.local.EncryptedPrefsManager
-import com.ultra.autodetector.data.model.LicenseStatus
+import com.ultra.autodetector.data.local.UserEntity
 import com.ultra.autodetector.data.model.User
-import java.security.SecureRandom
-import java.security.MessageDigest
-import java.util.Base64
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.PBEKeySpec
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 class AuthRepository(context: Context) {
-    private val database = AppDatabase.getInstance(context)
-    private val prefs = EncryptedPrefsManager(context)
+    private val appContext = context.applicationContext
+    private val database = AppDatabase.getInstance(appContext)
+    private val users = database.userDao()
+    private val prefs = EncryptedPrefsManager(appContext)
 
-    suspend fun currentUser(): User? = withContext(Dispatchers.IO) {
-        val uid = prefs.getSessionUid() ?: return@withContext null
-        database.userDao().findByUid(uid)
-    }
-
-    suspend fun login(email: String, password: String): Result<User> = runCatching {
-        validate(email, password)
-        withContext(Dispatchers.IO) {
-            val user = database.userDao().findByEmail(email.trim())
-                ?: error("Incorrect email or password.")
-            require(verifyPassword(password, user.passwordHash)) { "Incorrect email or password." }
-            val loggedIn = user.copy(lastLoginAt = System.currentTimeMillis())
-            database.userDao().update(loggedIn)
-            prefs.setSessionUid(loggedIn.uid)
-            loggedIn
+    suspend fun signup(email: String, password: String): Result<User> = runCatching {
+        val normalizedEmail = validate(email, password)
+        require(!AdminConfig.isReservedEmail(normalizedEmail)) {
+            "This email is reserved for administrator."
         }
-    }
-
-    suspend fun register(email: String, password: String): Result<User> = runCatching {
-        validate(email, password)
         withContext(Dispatchers.IO) {
-            require(database.userDao().findByEmail(email.trim()) == null) {
+            require(users.getByEmail(normalizedEmail) == null) {
                 "An account with this email already exists."
             }
-            val user = User(
-                uid = "user-${UUID.randomUUID()}",
-                email = email.trim(),
-                passwordHash = hashPassword(password),
-                deviceInfo = "${Build.MANUFACTURER} ${Build.MODEL}",
+            val user = UserEntity(
+                id = "user-${UUID.randomUUID()}",
+                email = normalizedEmail,
+                passwordHash = AdminConfig.hashPass(password),
+                isAdmin = false,
+                licenseStatus = UserEntity.STATUS_PENDING,
+                expiryDate = System.currentTimeMillis() + TRIAL_MILLIS,
+                deviceId = deviceId(),
             )
-            database.userDao().insert(user)
-            prefs.setSessionUid(user.uid)
+            users.insert(user)
+            saveSession(user)
             user
         }
     }
 
-    suspend fun logout() = withContext(Dispatchers.IO) { prefs.setSessionUid(null) }
+    suspend fun register(email: String, password: String): Result<User> =
+        signup(email, password)
 
-    suspend fun changePassword(current: String, next: String): Result<Unit> = runCatching {
-        require(next.length >= 8) { "New password must be at least 8 characters." }
-        val user = currentUser() ?: error("Sign in before changing your password.")
-        require(verifyPassword(current, user.passwordHash)) { "Current password is incorrect." }
+    suspend fun login(email: String, password: String): Result<User> = runCatching {
+        val normalizedEmail = validate(email, password)
         withContext(Dispatchers.IO) {
-            database.userDao().update(user.copy(passwordHash = hashPassword(next)))
+            var user = users.getByEmail(normalizedEmail)
+            if (user == null && AdminConfig.matches(normalizedEmail, password)) {
+                user = UserEntity(
+                    id = ADMIN_ID,
+                    email = AdminConfig.ADMIN_EMAIL,
+                    passwordHash = AdminConfig.hashPass(password),
+                    isAdmin = true,
+                    licenseStatus = UserEntity.STATUS_APPROVED,
+                    expiryDate = Long.MAX_VALUE,
+                    deviceId = "administrator",
+                )
+                users.insert(user)
+            }
+            val account = requireNotNull(user) { "Incorrect email or password." }
+            require(account.passwordHash == AdminConfig.hashPass(password)) {
+                "Incorrect email or password."
+            }
+            saveSession(account)
+            account
         }
     }
+
+    suspend fun currentUser(): User? = withContext(Dispatchers.IO) {
+        val id = prefs.getSessionUid() ?: return@withContext null
+        users.getById(id)?.also(::saveSession)
+    }
+
+    suspend fun logout() = withContext(Dispatchers.IO) {
+        prefs.clearAll()
+    }
+
+    fun remainingLabel(user: User): String = user.remainingLabel()
+    fun hasActiveLicense(user: User): Boolean = user.hasActiveLicense()
 
     fun isAccessibilityGranted() = prefs.isAccessibilityGranted()
     fun setAccessibilityGranted(value: Boolean) = prefs.setAccessibilityGranted(value)
     fun isOverlayGranted() = prefs.isOverlayGranted()
     fun setOverlayGranted(value: Boolean) = prefs.setOverlayGranted(value)
 
-    private fun validate(email: String, password: String) {
-        require(Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) { "Enter a valid email address." }
-        require(password.length >= 8) { "Password must be at least 8 characters." }
-    }
-
-    private fun hashPassword(password: String): String {
-        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
-        val spec = PBEKeySpec(password.toCharArray(), salt, 120_000, 256)
-        val derived = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-        return "pbkdf2$${Base64.getEncoder().encodeToString(salt)}$${Base64.getEncoder().encodeToString(derived)}"
-    }
-
-    private fun verifyPassword(password: String, stored: String): Boolean {
-        if (!stored.startsWith("pbkdf2$")) {
-            return MessageDigest.isEqual(
-                MessageDigest.getInstance("SHA-256").digest(password.toByteArray(Charsets.UTF_8)),
-                stored.chunked(2).map { it.toInt(16).toByte() }.toByteArray(),
-            )
+    private fun validate(email: String, password: String): String {
+        val normalized = email.trim().lowercase()
+        require(Patterns.EMAIL_ADDRESS.matcher(normalized).matches()) {
+            "Enter a valid email address."
         }
-        val parts = stored.split('$')
-        if (parts.size != 3) return false
-        val salt = Base64.getDecoder().decode(parts[1])
-        val expected = Base64.getDecoder().decode(parts[2])
-        val spec = PBEKeySpec(password.toCharArray(), salt, 120_000, expected.size * 8)
-        val actual = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-        return MessageDigest.isEqual(actual, expected)
+        require(password.length >= 8) { "Password must be at least 8 characters." }
+        return normalized
     }
+
+    private fun saveSession(user: User) {
+        prefs.setSessionUid(user.id)
+        prefs.saveCurrentUserJson(
+            JSONObject()
+                .put("id", user.id)
+                .put("email", user.email)
+                .put("isAdmin", user.isAdmin)
+                .put("licenseStatus", user.licenseStatus)
+                .put("expiryDate", user.expiryDate)
+                .toString(),
+        )
+    }
+
+    private fun deviceId(): String =
+        "${Build.MANUFACTURER}-${Build.MODEL}-${Build.VERSION.SDK_INT}"
 
     companion object {
-        // The original prompt supplied exposed credentials. The app deliberately
-        // does not embed them; provision a real administrator through a trusted
-        // setup path before production use.
-        const val LOCAL_ADMIN_EMAIL = "admin@local.demo"
-        const val LOCAL_ADMIN_UID = "local-admin"
-        const val LOCAL_ADMIN_PASSWORD_HASH =
-            "2f441b3a48a433f4931311b899bf5e9931a9e3127622c2f50a5ed0a0f209a723"
-        const val LOCAL_ADMIN_PASSWORD_NOTE = "Use the development credential documented in android-app/README.md."
-        const val ADMIN_ROLE = "admin"
-
-        suspend fun seedAdmin(context: Context) {
-            val db = AppDatabase.getInstance(context)
-            withContext(Dispatchers.IO) {
-                if (db.userDao().findByEmail(LOCAL_ADMIN_EMAIL) == null) {
-                    db.userDao().insert(
-                        User(
-                            uid = LOCAL_ADMIN_UID,
-                            email = LOCAL_ADMIN_EMAIL,
-                            passwordHash = LOCAL_ADMIN_PASSWORD_HASH,
-                            role = ADMIN_ROLE,
-                            status = LicenseStatus.APPROVED.wireValue,
-                            expirationTimestamp = Long.MAX_VALUE,
-                            deviceInfo = "Local administrator",
-                        ),
-                    )
-                }
-            }
-        }
+        private const val ADMIN_ID = "local-admin"
+        private const val TRIAL_MILLIS = 7L * 24L * 60L * 60L * 1000L
     }
 }

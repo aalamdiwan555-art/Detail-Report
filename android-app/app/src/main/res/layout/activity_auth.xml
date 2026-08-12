@@ -5,78 +5,132 @@
     android:layout_height="match_parent"
     android:background="@color/ink"
     android:fillViewport="true">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
         android:orientation="vertical"
-        android:padding="28dp"
-        android:gravity="center_horizontal">
+        android:padding="24dp">
+
+        <com.airbnb.lottie.LottieAnimationView
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            android:layout_marginTop="22dp"
+            app:lottie_autoPlay="true"
+            app:lottie_fileName="lottie/login.json"
+            app:lottie_loop="true" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="44dp"
             android:text="ULTRA"
-            android:textColor="@color/teal"
+            android:textColor="@color/primary"
             android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:letterSpacing="0.28" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:text="@string/app_name"
             android:textColor="@android:color/white"
-            android:textSize="32sp"
+            android:textSize="30sp"
             android:textStyle="bold" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Private, user-controlled screen detection"
+            android:layout_marginTop="6dp"
+            android:text="Private detection. No cloud. No keys."
             android:textColor="@color/muted"
-            android:textSize="15sp" />
+            android:textSize="14sp" />
+
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/auth_tabs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="26dp"
+            app:tabIndicatorColor="@color/primary"
+            app:tabSelectedTextColor="@color/primary"
+            app:tabTextColor="@color/muted" />
+
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:hint="Email">
+            android:layout_marginTop="18dp"
+            android:hint="Email address"
+            app:boxBackgroundMode="outline"
+            app:boxStrokeColor="@color/primary"
+            app:startIconDrawable="@android:drawable/ic_dialog_email">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/input_email"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textEmailAddress" />
+                android:inputType="textEmailAddress"
+                android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
+
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:hint="Password"
-            app:endIconMode="password_toggle">
+            app:boxBackgroundMode="outline"
+            app:boxStrokeColor="@color/primary"
+            app:endIconMode="password_toggle"
+            app:startIconDrawable="@android:drawable/ic_lock_lock">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/input_password"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="textPassword" />
+                android:inputType="textPassword"
+                android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_login"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="56dp"
             android:layout_marginTop="20dp"
-            android:text="LOGIN" />
+            android:text="LOGIN"
+            android:textColor="@color/ink"
+            android:textStyle="bold"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="18dp" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_register"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="20dp"
+            android:text="CREATE ACCOUNT"
+            android:textColor="@color/ink"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="18dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_trial"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="REGISTER" />
+            android:layout_marginTop="10dp"
+            android:text="Try 7-day trial"
+            android:textColor="@color/primary" />
+
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/status_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="16dp"
             android:visibility="gone"
-            app:cardBackgroundColor="@color/surface_blue">
+            app:cardBackgroundColor="@color/card"
+            app:cardCornerRadius="20dp"
+            app:strokeColor="@color/stroke"
+            app:strokeWidth="1dp">
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -86,8 +140,8 @@
                     android:id="@+id/status_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/teal"
-                    android:textSize="20sp"
+                    android:textColor="@color/primary"
+                    android:textSize="18sp"
                     android:textStyle="bold" />
                 <TextView
                     android:id="@+id/status_details"
@@ -97,10 +151,12 @@
                     android:textColor="@color/muted" />
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_renew"
-                    android:layout_width="match_parent"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="Renew account via Telegram" />
+                    android:layout_marginTop="6dp"
+                    android:text="Request approval"
+                    android:textColor="@color/primary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>

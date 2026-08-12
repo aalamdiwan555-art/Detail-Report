@@ -24,26 +24,28 @@ This build is fully offline and does not import Firebase or require a cloud
 service. Data is private to the Android app sandbox and does not synchronize
 between devices.
 
-New accounts are pending until an administrator approves them. Passwords for
-new accounts use PBKDF2-HMAC-SHA256 with a per-account random salt.
+New accounts are pending until an administrator approves them. Passwords are
+stored as salted SHA-256 hashes in the local Room database and the current
+session is stored in Android `EncryptedSharedPreferences`.
 
-The imported prompt included exposed administrator credentials. Those values
-are intentionally not embedded in the APK. The development-only local admin
-seed remains `admin@local.demo` with the development password documented in
-the original imported project; replace this with a trusted provisioning path
-before release.
+Administrator authorization is provisioned at build time rather than stored as
+plain-text credential material in source control. Supply `ULTRA_ADMIN_EMAIL`
+and `ULTRA_ADMIN_PASSWORD_HASH` as build environment variables (the password
+hash is `SHA-256("ultra_salt_2024" + password)`) before the release build.
+If those values are absent, administrator access is intentionally disabled.
 
 ## Build
 
 From a machine with Android SDK platform 35 and build tools installed:
 
 ```bash
-gradle assembleDebug
+./gradlew assembleDebug
 ```
 
 The current Replit container has Java and Gradle but no Android SDK, so APK
-compilation cannot be completed here. The project targets Android API 34 and
-compiles against platform 35.
+compilation cannot be completed here. Install Android SDK platform 35 and build
+tools, then run the command from `android-app/`. The project targets Android
+API 34 and compiles against platform 35.
 
 ## Safety boundary
 

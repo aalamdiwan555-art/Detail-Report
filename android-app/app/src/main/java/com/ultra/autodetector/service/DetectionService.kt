@@ -22,6 +22,7 @@ import android.content.pm.ServiceInfo
 import com.ultra.autodetector.R
 import com.ultra.autodetector.UltraAutoDetectorApp
 import com.ultra.autodetector.data.repository.TemplateRepository
+import com.ultra.autodetector.data.local.EncryptedPrefsManager
 import com.ultra.autodetector.opencv.OpenCvManager
 import com.ultra.autodetector.opencv.TemplateMatcher
 import com.ultra.autodetector.ui.main.MainActivity
@@ -43,11 +44,13 @@ class DetectionService : Service() {
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
     private var paused = false
+    private lateinit var prefs: EncryptedPrefsManager
     private val matcher = TemplateMatcher()
     private val templates = mutableListOf<LoadedTemplate>()
 
     override fun onCreate() {
         super.onCreate()
+        prefs = EncryptedPrefsManager(this)
         val filter = IntentFilter().apply {
             addAction(ACTION_STOP)
             addAction(ACTION_PAUSE)
@@ -99,6 +102,7 @@ class DetectionService : Service() {
         paused = false
         isPaused = false
         isRunning = true
+        prefs.setDetectorWasRunning(true)
         job = scope.launch {
             loadTemplates()
             while (isActive) {
@@ -150,6 +154,7 @@ class DetectionService : Service() {
         templates.clear()
         isRunning = false
         isPaused = false
+        if (::prefs.isInitialized) prefs.setDetectorWasRunning(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true)
         stopSelf()
     }

@@ -8,8 +8,8 @@ template detection, license handling, and explicit gesture controls.
 ### Android app
 
 - Open `android-app/` in Android Studio with Android SDK platform 35.
-- The default app uses a private on-device Room/SQLite database and has no Firebase or cloud dependency.
-- Build with `gradle assembleDebug` from `android-app/` on a machine with Android SDK platform 35.
+- The app uses a private on-device Room/SQLite database and has no cloud dependency.
+- Build with `./gradlew assembleDebug` from `android-app/` on a machine with Android SDK platform 35.
 - Replit can validate Gradle configuration, but this container does not include the Android SDK, so APK compilation must run on an Android development machine.
 
 The app currently uses local database mode:
@@ -29,7 +29,7 @@ The app currently uses local database mode:
 
 - Android: Kotlin, Jetpack Compose, Android API 26–35
 - Local boundary: Android SQLite database and app-private template files
-- Optional cloud boundary: Firebase Authentication, Firestore, and Storage
+- Local boundary: Room database, encrypted preferences, and app-private files
 - Services: MediaProjection foreground capture, explicit AccessibilityService gestures, overlay controls
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
@@ -41,21 +41,20 @@ The app currently uses local database mode:
 
 ## Where things live
 
-- `android-app/app/src/main/java/com/ultra/autodetector/ui/` — Compose screens and state
-- `android-app/app/src/main/java/com/ultra/autodetector/data/` — local database and optional Firebase repository boundaries
+- `android-app/app/src/main/java/com/ultra/autodetector/ui/` — XML activities and adapters
+- `android-app/app/src/main/java/com/ultra/autodetector/data/` — Room database and encrypted local session boundaries
 - `android-app/app/src/main/java/com/ultra/autodetector/service/` — capture, gesture, and floating-widget services
-- `android-app/app/src/main/java/com/ultra/autodetector/data/Models.kt` — account, license, template, and permission state
-- `firebase/firestore.rules` and `firebase/storage.rules` — server-side access controls
+- `android-app/app/src/main/java/com/ultra/autodetector/data/local/` — account, notice, template, and encrypted preference state
 - `docs/ultra-auto-detector-blueprint-report.md` — security and platform review of the uploaded blueprint
 
 ## Architecture decisions
 
-- Administrator authorization is local-development-only; the app never embeds the exposed prompt password.
+- Administrator authorization is provisioned at build time; the app never embeds the exposed prompt password in source.
 - Local database mode keeps the UI usable without cloud credentials.
 - Screen capture and overlay services start only after explicit user actions and permissions.
 - The accessibility service also matches the configured multilingual approval labels while detection is running.
 - MediaProjection authorization is held in memory for the current session instead of being serialized as a reusable token.
-- License renewals extend from the later of the current expiration and now; admin actions are written to an immutable audit collection.
+- License renewals extend from the later of the current expiration and now; admin actions are written to Room.
 
 ## Product
 
@@ -67,7 +66,6 @@ Users can sign in or create a pending account, review license status, grant devi
 
 ## Gotchas
 
-- A Firebase Android configuration is optional for local database mode but required only for the optional cloud adapter.
 - Before release, replace local admin provisioning with a trusted server-side or managed provisioning path.
 - Android SDK platform 35 is required to compile the app; Replit's current container does not provide it.
 

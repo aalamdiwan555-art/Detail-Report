@@ -1,15 +1,15 @@
 # Ultra AutoDetector implementation
 
-This file is the implementation companion to the eight uploaded
-`ultra_master_prompt` parts. The source lives in `android-app/` and keeps the
-native Kotlin + Jetpack Compose architecture from the imported project.
+This document describes the fully offline native Android implementation. The
+app does not use Firebase, Supabase, Google APIs, cloud auth, or API keys.
 
 ## Product scope
 
-- User registration, sign-in, password reset, and pending/approved/rejected/
-  expired license states.
-- Admin license actions and template upload/delete through Firebase.
-- Telegram renewal handoff with the account status and UID.
+- Local account registration and sign-in with pending/approved/rejected/expired
+  license states.
+- Room-backed administrator panel for approvals, expiry editing, deletion,
+  notices, counters, filters, and CSV export.
+- Encrypted local session and permission metadata.
 - Explicit Android permissions for screen capture, overlay, notifications, and
   accessibility gestures.
 - Foreground MediaProjection capture, bounded template matching, and a
@@ -17,48 +17,36 @@ native Kotlin + Jetpack Compose architecture from the imported project.
 
 ## Source map
 
-| Blueprint area | Implementation |
+| Area | Implementation |
 | --- | --- |
-| Firebase Auth manager | `android-app/app/src/main/java/com/ultra/autodetector/data/firebase/FirebaseAuthManager.kt` |
-| Firestore manager | `android-app/app/src/main/java/com/ultra/autodetector/data/firebase/FirestoreManager.kt` |
-| Storage manager | `android-app/app/src/main/java/com/ultra/autodetector/data/firebase/StorageManager.kt` |
-| Encrypted local preferences | `android-app/app/src/main/java/com/ultra/autodetector/data/local/EncryptedPrefsManager.kt` |
+| Local account entity | `android-app/app/src/main/java/com/ultra/autodetector/data/local/UserEntity.kt` |
+| Local notices | `android-app/app/src/main/java/com/ultra/autodetector/data/local/NoticeEntity.kt` |
+| Room database | `android-app/app/src/main/java/com/ultra/autodetector/data/local/AppDatabase.kt` |
+| Encrypted preferences | `android-app/app/src/main/java/com/ultra/autodetector/data/local/EncryptedPrefsManager.kt` |
+| Offline auth | `android-app/app/src/main/java/com/ultra/autodetector/data/repository/AuthRepository.kt` |
+| Admin provisioning boundary | `android-app/app/src/main/java/com/ultra/autodetector/data/repository/AdminConfig.kt` |
 | Capture/image adapter | `android-app/app/src/main/java/com/ultra/autodetector/opencv/OpenCvManager.kt` |
-| Screen capture | `android-app/app/src/main/java/com/ultra/autodetector/opencv/ScreenCaptureManager.kt` |
-| Template matching | `android-app/app/src/main/java/com/ultra/autodetector/opencv/TemplateMatcher.kt` |
-| Foreground detection | `android-app/app/src/main/java/com/ultra/autodetector/service/DetectionService.kt` |
+| Screen capture | `android-app/app/src/main/java/com/ultra/autodetector/service/DetectionService.kt` |
 | Accessibility gestures | `android-app/app/src/main/java/com/ultra/autodetector/service/AutoClickService.kt` |
 | Floating controls | `android-app/app/src/main/java/com/ultra/autodetector/service/FloatingWidgetService.kt` |
-| User/admin UI | `android-app/app/src/main/java/com/ultra/autodetector/ui/MainActivity.kt` |
-
-The imported project uses one Compose activity instead of the blueprint's
-legacy XML activity split. This avoids duplicate navigation and keeps all
-permission results in one lifecycle owner.
+| User/admin UI | `android-app/app/src/main/java/com/ultra/autodetector/ui/` |
 
 ## Security decisions
 
-The uploaded prompt contains administrator credentials and proposes a
-client-side email/password administrator check. Those values are treated as
-exposed and are not copied into source. Production admin access is based on
-the Firebase Authentication `admin == true` custom claim, with Firestore and
-Storage rules enforcing the same claim server-side.
+Administrator email and password hash are supplied only at build time through
+`ULTRA_ADMIN_EMAIL` and `ULTRA_ADMIN_PASSWORD_HASH`. The password itself is
+never stored in source control. If those values are absent, administrator
+access is disabled instead of silently falling back to a demo credential.
 
-The app has a local-only demo repository when `google-services.json` is absent.
-The demo identities are explicitly marked as demo behavior in the Android
-README and are not production credentials.
-
-MediaProjection grants are kept in memory for the current app session.
-Encrypted preferences store permission metadata only; they do not serialize a
-reusable screen-capture token.
+MediaProjection grants are held in memory for the current app session. The
+reboot receiver may restore the floating controls when overlay permission is
+present, but Android requires fresh capture consent after reboot.
 
 ## Build and configuration
 
 1. Open `android-app/` in Android Studio with Android SDK platform 35.
-2. Add a Firebase-provided `app/google-services.json` only for a configured
-   Firebase project.
-3. Deploy and test `firebase/firestore.rules` and `firebase/storage.rules`
-   with authenticated, unauthenticated, regular-user, and admin cases.
-4. Build with `./gradlew assembleDebug`.
+2. Configure the two admin build variables if administrator access is needed.
+3. Run `./gradlew assembleDebug`.
 
 The current Replit container does not include the Android SDK, so APK
 compilation and device permission testing must run on an Android development
@@ -69,5 +57,4 @@ machine.
 No arbitrary native OpenCV artifact is bundled. `OpenCvManager` exposes the
 image-reader and bitmap conversion boundary, while `TemplateMatcher` provides
 a bounded normalized-correlation implementation that can be built and tested
-without native binaries. A selected OpenCV version/ABI can replace that
-adapter later without changing the service contract.
+without native binaries.

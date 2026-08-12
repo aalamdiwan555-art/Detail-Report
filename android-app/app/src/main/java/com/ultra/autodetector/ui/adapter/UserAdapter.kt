@@ -7,8 +7,9 @@ import com.ultra.autodetector.data.model.User
 import com.ultra.autodetector.databinding.ItemUserRowBinding
 
 class UserAdapter(
-    private val onGrant: (User, Int?) -> Unit,
+    private val onGrant: (User, Int) -> Unit,
     private val onReject: (User) -> Unit,
+    private val onOpen: (User) -> Unit = {},
 ) : RecyclerView.Adapter<UserAdapter.Holder>() {
     private var items = emptyList<User>()
 
@@ -21,12 +22,13 @@ class UserAdapter(
     inner class Holder(private val binding: ItemUserRowBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(user: User) {
             binding.userEmail.text = user.email
-            binding.userStatus.text = user.licenseStatus.wireValue.uppercase()
+            binding.userStatus.text = user.licenseStatus.uppercase()
             binding.userRemaining.text = user.remainingLabel()
-            binding.btnOneDay.setOnClickListener { onGrant(user, 1) }
-            binding.btnTwoDays.setOnClickListener { onGrant(user, 2) }
-            binding.btnThreeDays.setOnClickListener { onGrant(user, 3) }
-            binding.btnLifetime.setOnClickListener { onGrant(user, null) }
+            binding.root.setOnClickListener { onOpen(user) }
+            binding.btnOneDay.setOnClickListener { onGrant(user, 7) }
+            binding.btnTwoDays.setOnClickListener { onGrant(user, 30) }
+            binding.btnThreeDays.setOnClickListener { onGrant(user, 365) }
+            binding.btnLifetime.setOnClickListener { onGrant(user, 3650) }
             binding.btnReject.setOnClickListener { onReject(user) }
         }
     }

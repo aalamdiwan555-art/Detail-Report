@@ -15,8 +15,8 @@ object TelegramHelper {
     fun openRenewalChat(context: Context, user: User): Boolean {
         val message = Constants.TELEGRAM_MESSAGE_TEMPLATE.format(
             user.email,
-            user.licenseStatus.wireValue,
-            user.uid,
+            user.licenseStatus,
+            user.id,
             "${Build.MANUFACTURER} ${Build.MODEL}",
             Build.VERSION.RELEASE,
             Date(),

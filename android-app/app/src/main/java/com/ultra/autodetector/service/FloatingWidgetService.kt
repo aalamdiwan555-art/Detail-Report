@@ -6,6 +6,9 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -27,6 +30,14 @@ class FloatingWidgetService : Service() {
     private var downY = 0f
     private var startX = 0
     private var startY = 0
+    private val handler = Handler(Looper.getMainLooper())
+    private var startedAt = 0L
+    private val timer = object : Runnable {
+        override fun run() {
+            bubble?.text = "U\n${elapsedLabel()}"
+            handler.postDelayed(this, 1_000L)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -38,7 +49,9 @@ class FloatingWidgetService : Service() {
             removeWidget()
             stopSelf()
         } else if (root == null && canDrawOverlays()) {
+            startedAt = SystemClock.elapsedRealtime()
             createWidget()
+            handler.post(timer)
         }
         return START_NOT_STICKY
     }
@@ -59,12 +72,10 @@ class FloatingWidgetService : Service() {
         bubble = marker
         root = frame
 
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else WindowManager.LayoutParams.TYPE_PHONE
+        val type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         params = WindowManager.LayoutParams(
-            size,
-            size,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
@@ -158,6 +169,7 @@ class FloatingWidgetService : Service() {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.M || android.provider.Settings.canDrawOverlays(this)
 
     private fun removeWidget() {
+        handler.removeCallbacks(timer)
         root?.let { runCatching { windowManager.removeView(it) } }
         root = null
         bubble = null
@@ -170,7 +182,13 @@ class FloatingWidgetService : Service() {
         super.onDestroy()
     }
 
+    private fun elapsedLabel(): String {
+        val elapsed = ((SystemClock.elapsedRealtime() - startedAt) / 1_000L).coerceAtLeast(0L)
+        return "%02d:%02d".format(elapsed / 60L, elapsed % 60L)
+    }
+
     companion object {
         const val ACTION_HIDE = Constants.ACTION_HIDE_FLOATING_WIDGET
+        const val ACTION_BOOT_RECOVERY = "com.ultra.autodetector.action.BOOT_RECOVERY"
     }
 }

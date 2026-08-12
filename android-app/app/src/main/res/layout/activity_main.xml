@@ -3,131 +3,186 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/ink">
+    android:background="@color/ink"
+    android:fillViewport="true">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:padding="18dp">
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical">
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Control center"
-                android:textColor="@android:color/white"
-                android:textSize="24sp"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ULTRA"
+                    android:textColor="@color/primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.28" />
+                <TextView
+                    android:id="@+id/account_email"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/avatar_text"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:background="@drawable/bg_gradient_primary"
+                android:gravity="center"
+                android:textColor="@color/ink"
+                android:textSize="18sp"
                 android:textStyle="bold" />
             <ImageButton
                 android:id="@+id/btn_logout"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
                 android:background="@android:color/transparent"
                 android:contentDescription="Logout"
-                android:src="@android:drawable/ic_lock_power_off" />
+                android:src="@android:drawable/ic_lock_power_off"
+                android:tint="@color/muted" />
         </LinearLayout>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/notice_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/warning_bg"
+            app:cardCornerRadius="16dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:padding="14dp">
+                <TextView
+                    android:id="@+id/notice_text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="marquee"
+                    android:focusable="true"
+                    android:marqueeRepeatLimit="marquee_forever"
+                    android:scrollHorizontally="true"
+                    android:textColor="@color/ink"
+                    android:textStyle="bold" />
+                <ImageButton
+                    android:id="@+id/btn_close_notice"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="@android:color/transparent"
+                    android:contentDescription="Close notice"
+                    android:src="@android:drawable/ic_menu_close_clear_cancel"
+                    android:tint="@color/ink" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            app:cardBackgroundColor="@color/surface_blue">
+            android:layout_marginTop="16dp"
+            app:cardBackgroundColor="@color/card"
+            app:cardCornerRadius="20dp"
+            app:strokeColor="@color/stroke"
+            app:strokeWidth="1dp">
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="18dp">
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="SUBSCRIPTION"
                     android:textColor="@color/muted"
-                    android:textSize="12sp" />
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
                 <TextView
                     android:id="@+id/subscription_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textColor="@color/teal"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/primary"
                     android:textSize="21sp"
                     android:textStyle="bold" />
                 <TextView
                     android:id="@+id/subscription_details"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="4dp"
                     android:textColor="@android:color/white" />
+                <ProgressBar
+                    android:id="@+id/subscription_progress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="6dp"
+                    android:layout_marginTop="14dp"
+                    android:max="100"
+                    android:progressTint="@color/primary" />
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_renew"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:text="Renew via Telegram" />
+                    android:layout_marginTop="4dp"
+                    android:text="Renew access"
+                    android:textColor="@color/primary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:text="PERMISSIONS"
-            android:textColor="@color/teal"
+            android:textColor="@color/primary"
+            android:textSize="11sp"
             android:textStyle="bold" />
+        <TextView
+            android:id="@+id/permission_hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:textColor="@color/muted"
+            android:textSize="12sp" />
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="vertical"
-            android:background="@color/surface_blue"
-            android:padding="14dp">
-            <LinearLayout
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:gravity="center_vertical" android:paddingVertical="6dp">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:text="Accessibility service"
-                    android:textColor="@android:color/white" />
-                <com.google.android.material.button.MaterialButton android:id="@+id/btn_accessibility"
-                    style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" android:text="Grant" />
-                <TextView android:id="@+id/accessibility_status" android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" android:textColor="@color/teal" />
-            </LinearLayout>
-            <LinearLayout
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:gravity="center_vertical" android:paddingVertical="6dp">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:text="Draw over other apps"
-                    android:textColor="@android:color/white" />
-                <com.google.android.material.button.MaterialButton android:id="@+id/btn_overlay"
-                    style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" android:text="Grant" />
-                <TextView android:id="@+id/overlay_status" android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" android:textColor="@color/teal" />
-            </LinearLayout>
-            <LinearLayout
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:gravity="center_vertical" android:paddingVertical="6dp">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-                    android:layout_weight="1" android:text="Screen recording consent"
-                    android:textColor="@android:color/white" />
-                <com.google.android.material.button.MaterialButton android:id="@+id/btn_screen_capture"
-                    style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" android:text="Grant" />
-                <TextView android:id="@+id/capture_status" android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" android:textColor="@color/teal" />
-            </LinearLayout>
+            android:layout_marginTop="9dp"
+            android:orientation="horizontal">
+            <include layout="@layout/permission_row_accessibility" />
+            <include layout="@layout/permission_row_overlay" />
         </LinearLayout>
+        <include layout="@layout/permission_row_capture" />
+
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            app:cardBackgroundColor="@color/surface_blue">
+            android:layout_marginTop="14dp"
+            app:cardBackgroundColor="@color/card"
+            app:cardCornerRadius="20dp"
+            app:strokeColor="@color/stroke"
+            app:strokeWidth="1dp">
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="18dp">
                 <TextView
                     android:id="@+id/detector_status"
                     android:layout_width="wrap_content"
@@ -139,9 +194,8 @@
                     android:id="@+id/detector_error"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="Account expired or permissions are missing. Renew via Telegram."
-                    android:textColor="@color/warning"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@color/error"
                     android:visibility="gone" />
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -150,27 +204,54 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_start_stop"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="56dp"
                         android:layout_weight="1"
-                        android:text="START DETECTION" />
+                        android:text="START DETECTION"
+                        android:textColor="@color/ink"
+                        android:textStyle="bold"
+                        app:backgroundTint="@color/primary"
+                        app:cornerRadius="18dp" />
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_pause"
                         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                         android:layout_width="0dp"
-                        android:layout_height="wrap_content"
+                        android:layout_height="56dp"
                         android:layout_marginStart="8dp"
-                        android:layout_weight="1"
+                        android:layout_weight="0.58"
                         android:text="PAUSE"
-                        android:visibility="gone" />
+                        android:textColor="@color/primary"
+                        android:visibility="gone"
+                        app:cornerRadius="18dp" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_admin"
+
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="ADMIN CONTROL PANEL"
+            android:layout_marginTop="14dp"
+            app:cardBackgroundColor="@color/console"
+            app:cardCornerRadius="20dp">
+            <TextView
+                android:id="@+id/console_text"
+                android:layout_width="match_parent"
+                android:layout_height="116dp"
+                android:fontFamily="monospace"
+                android:gravity="top|start"
+                android:padding="16dp"
+                android:text="› Local console ready"
+                android:textColor="@color/primary"
+                android:textSize="12sp" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_admin"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="OPEN ADMIN CONTROL"
+            android:textColor="@color/primary"
             android:visibility="gone" />
     </LinearLayout>
 </ScrollView>

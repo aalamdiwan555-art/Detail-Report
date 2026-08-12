@@ -5,11 +5,15 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.ultra.autodetector.data.model.Template
-import com.ultra.autodetector.data.model.User
 
-@Database(entities = [User::class, Template::class], version = 1, exportSchema = false)
+@Database(
+    entities = [UserEntity::class, NoticeEntity::class, Template::class],
+    version = 2,
+    exportSchema = false,
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
+    abstract fun noticeDao(): NoticeDao
     abstract fun templateDao(): TemplateDao
 
     companion object {
