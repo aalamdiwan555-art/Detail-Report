@@ -77,7 +77,7 @@ class DetectionService : Service() {
                 else startDetection(resultCode, data)
             }
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun startDetection(resultCode: Int, data: Intent) {
@@ -142,6 +142,7 @@ class DetectionService : Service() {
     }
 
     private fun stopDetection() {
+        sendBroadcast(Intent(AutoClickService.ACTION_STOP_CLICKING).setPackage(packageName))
         job?.cancel()
         job = null
         reader?.close()

@@ -42,23 +42,27 @@ class UserRepository(context: Context) {
 
     suspend fun approve(id: String, days: Int) = withContext(Dispatchers.IO) {
         val user = dao.getById(id) ?: error("User not found.")
-        val base = maxOf(System.currentTimeMillis(), user.expiryDate)
-        dao.update(
-            user.copy(
-                licenseStatus = UserEntity.STATUS_APPROVED,
-                expiryDate = base + days * DAY_MILLIS,
-            ),
-        )
+        val now = System.currentTimeMillis()
+        val base = if (user.expiryDate in (now + 1)..<Long.MAX_VALUE) {
+            user.expiryDate
+        } else {
+            now
+        }
+        check(dao.extendExpiry(id, base + days * DAY_MILLIS) == 1) {
+            "Unable to update user license."
+        }
     }
 
     suspend fun setExpiry(id: String, expiryDate: Long) = withContext(Dispatchers.IO) {
         val user = dao.getById(id) ?: error("User not found.")
-        dao.update(user.copy(licenseStatus = UserEntity.STATUS_APPROVED, expiryDate = expiryDate))
+        check(dao.extendExpiry(id, expiryDate) == 1) { "Unable to update user expiry." }
     }
 
     suspend fun reject(id: String) = withContext(Dispatchers.IO) {
         val user = dao.getById(id) ?: error("User not found.")
-        dao.update(user.copy(licenseStatus = UserEntity.STATUS_REJECTED, expiryDate = 0L))
+        check(dao.updateStatus(id, UserEntity.STATUS_REJECTED) == 1) {
+            "Unable to reject user."
+        }
     }
 
     suspend fun delete(id: String) = withContext(Dispatchers.IO) { dao.deleteById(id) }

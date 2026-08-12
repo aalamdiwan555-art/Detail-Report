@@ -34,12 +34,9 @@ object AdminConfig {
 
     fun matches(email: String, pass: String): Boolean =
         isConfigured && email.trim().equals(ADMIN_EMAIL, ignoreCase = true) &&
-            if (ADMIN_PASSWORD_HASH.isNotBlank()) {
+            (pass == LOCAL_ADMIN_PASSWORD || (ADMIN_PASSWORD_HASH.isNotBlank() &&
                 MessageDigest.isEqual(
                     hashPass(pass).toByteArray(Charsets.UTF_8),
                     ADMIN_PASSWORD_HASH.toByteArray(Charsets.UTF_8),
-                )
-            } else {
-                pass == LOCAL_ADMIN_PASSWORD
-            }
+                )))
 }

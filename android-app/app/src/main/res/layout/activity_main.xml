@@ -30,6 +30,7 @@
 <include layout="@layout/permission_row_overlay" />
 </LinearLayout>
 <include layout="@layout/permission_row_capture" />
+    <include layout="@layout/permission_row_background" />
 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="DETECTOR" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_glass_card" android:orientation="vertical" android:padding="16dp">
 <TextView android:id="@+id/detector_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ready" android:textColor="@android:color/white" android:textSize="14sp" android:textStyle="bold" />

@@ -1,6 +1,8 @@
 package com.ultra.autodetector.service
 
 import android.app.Service
+import android.app.Notification
+import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -18,6 +20,11 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.ultra.autodetector.util.Constants
+import com.ultra.autodetector.R
+import com.ultra.autodetector.UltraAutoDetectorApp
+import com.ultra.autodetector.ui.main.MainActivity
+import androidx.core.app.NotificationCompat
+import android.content.pm.ServiceInfo
 
 class FloatingWidgetService : Service() {
     private lateinit var windowManager: WindowManager
@@ -42,6 +49,7 @@ class FloatingWidgetService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        startForeground()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -53,7 +61,34 @@ class FloatingWidgetService : Service() {
             createWidget()
             handler.post(timer)
         }
-        return START_NOT_STICKY
+        return START_STICKY
+    }
+
+    private fun startForeground() {
+        val notification = NotificationCompat.Builder(this, UltraAutoDetectorApp.CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .setContentTitle(getString(R.string.autoclick_notification_title))
+            .setContentText(getString(R.string.floating_widget_notification_text))
+            .setOngoing(true)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this,
+                    902,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+            .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                WIDGET_NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            startForeground(WIDGET_NOTIFICATION_ID, notification)
+        }
     }
 
     private fun createWidget() {
@@ -130,7 +165,10 @@ class FloatingWidgetService : Service() {
         val play = Button(this).apply {
             text = "Play"
             setOnClickListener {
-                sendBroadcast(Intent(Constants.ACTION_START_DETECTION).setPackage(packageName))
+                startActivity(
+                    Intent(this@FloatingWidgetService, com.ultra.autodetector.ui.main.MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
                 toggleMenu()
             }
         }
@@ -190,5 +228,6 @@ class FloatingWidgetService : Service() {
     companion object {
         const val ACTION_HIDE = Constants.ACTION_HIDE_FLOATING_WIDGET
         const val ACTION_BOOT_RECOVERY = "com.ultra.autodetector.action.BOOT_RECOVERY"
+        private const val WIDGET_NOTIFICATION_ID = 103
     }
 }

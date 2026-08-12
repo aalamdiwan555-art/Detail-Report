@@ -49,8 +49,14 @@ interface UserDao {
     @Update
     suspend fun update(user: UserEntity)
 
+    @Query("UPDATE users SET licenseStatus = :status, expiryDate = :expiryDate WHERE id = :id")
+    suspend fun updateStatus(id: String, status: String, expiryDate: Long = 0L): Int
+
+    @Query("UPDATE users SET licenseStatus = 'approved', expiryDate = :expiryDate WHERE id = :id")
+    suspend fun extendExpiry(id: String, expiryDate: Long): Int
+
     @Query("DELETE FROM users WHERE id = :id")
-    suspend fun deleteById(id: String)
+    suspend fun deleteById(id: String): Int
 
     @Query("DELETE FROM users WHERE licenseStatus = 'pending'")
     suspend fun deletePending()

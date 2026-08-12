@@ -6,4 +6,7 @@
     <string name="detection_notification_channel">Detection service</string>
     <string name="detection_notification_title">Detection is running</string>
     <string name="detection_notification_text">Screen matching is active. Tap to return to controls.</string>
+    <string name="autoclick_notification_title">Auto-click service is active</string>
+    <string name="autoclick_notification_text">User-controlled gestures are ready in the background.</string>
+    <string name="floating_widget_notification_text">Floating controls are available.</string>
 </resources>

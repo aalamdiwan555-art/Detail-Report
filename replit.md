@@ -49,9 +49,16 @@ The app currently uses local database mode:
 
 ## Architecture decisions
 
-- Administrator authorization is provisioned at build time; the app never embeds the exposed prompt password in source.
+- Administrator authorization supports the configured build-time credentials and the
+  local offline administrator fallback in `AdminConfig.kt`; replace that fallback
+  with managed provisioning before release.
 - Local database mode keeps the UI usable without cloud credentials.
 - Screen capture and overlay services start only after explicit user actions and permissions.
+- The main screen reports accessibility, overlay, battery-optimization, notification,
+  and manufacturer auto-start readiness. Detection remains disabled until the three
+  core background permissions are granted.
+- Auto-click gestures run through the sticky foreground AccessibilityService with a
+  persistent notification and a wake lock held only while clicking is active.
 - The accessibility service also matches the configured multilingual approval labels while detection is running.
 - MediaProjection authorization is held in memory for the current session instead of being serialized as a reusable token.
 - License renewals extend from the later of the current expiration and now; admin actions are written to Room.

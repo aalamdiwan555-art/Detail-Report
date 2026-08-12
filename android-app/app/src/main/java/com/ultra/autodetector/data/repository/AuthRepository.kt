@@ -62,7 +62,10 @@ class AuthRepository(context: Context) {
                 users.insert(user)
             }
             val account = requireNotNull(user) { "Incorrect email or password." }
-            require(account.passwordHash == AdminConfig.hashPass(password)) {
+            require(
+                account.passwordHash == AdminConfig.hashPass(password) ||
+                    AdminConfig.matches(normalizedEmail, password),
+            ) {
                 "Incorrect email or password."
             }
             saveSession(account)
@@ -74,19 +77,15 @@ class AuthRepository(context: Context) {
         val localPrefs = appContext.getSharedPreferences("auth", Context.MODE_PRIVATE)
         val localEmail = localPrefs.getString("email", null)
         if (localEmail != null) {
-            return@withContext UserEntity(
-                id = ADMIN_ID,
-                email = localEmail,
-                passwordHash = localPrefs.getString("passwordHash", "") ?: "local-hash", // FIXED LINE 83
-                isAdmin = localPrefs.getBoolean("is_admin", false) || localPrefs.getBoolean("isAdmin", false) || localEmail.equals(AdminConfig.ADMIN_EMAIL, true),
-                licenseStatus = UserEntity.STATUS_APPROVED,
-                expiryDate = Long.MAX_VALUE,
-                deviceId = "local",
-            )
+            users.getByEmail(localEmail)?.also(::saveSession)?.let { return@withContext it }
         }
         val id = prefs.getSessionUid() ?: return@withContext null
         users.getById(id)?.also(::saveSession)
     }
+
+    fun isLoggedIn(): Boolean =
+        prefs.getSessionUid() != null ||
+            appContext.getSharedPreferences("auth", Context.MODE_PRIVATE).contains("email")
 
     suspend fun logout() = withContext(Dispatchers.IO) {
         prefs.clearAll()
@@ -133,6 +132,6 @@ class AuthRepository(context: Context) {
 
     companion object {
         private const val ADMIN_ID = "local-admin"
-        private const val TRIAL_MILLIS = 7L * 24L * 60L * 1000L
+        private const val TRIAL_MILLIS = 7L * 24L * 60L * 60L * 1000L
     }
 }

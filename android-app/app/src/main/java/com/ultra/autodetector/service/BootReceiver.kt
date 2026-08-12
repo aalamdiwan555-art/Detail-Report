@@ -19,9 +19,12 @@ class BootReceiver : BroadcastReceiver() {
             !Settings.canDrawOverlays(context)
         ) return
         if (!EncryptedPrefsManager(context).wasDetectorRunning()) return
-        context.startService(
-            Intent(context, FloatingWidgetService::class.java)
-                .setAction(FloatingWidgetService.ACTION_BOOT_RECOVERY),
-        )
+        val recovery = Intent(context, FloatingWidgetService::class.java)
+            .setAction(FloatingWidgetService.ACTION_BOOT_RECOVERY)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(recovery)
+        } else {
+            context.startService(recovery)
+        }
     }
 }

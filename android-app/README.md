@@ -28,11 +28,10 @@ New accounts are pending until an administrator approves them. Passwords are
 stored as salted SHA-256 hashes in the local Room database and the current
 session is stored in Android `EncryptedSharedPreferences`.
 
-Administrator authorization is provisioned at build time rather than stored as
-plain-text credential material in source control. Supply `ULTRA_ADMIN_EMAIL`
-and `ULTRA_ADMIN_PASSWORD_HASH` as build environment variables (the password
-hash is `SHA-256("ultra_salt_2024" + password)`) before the release build.
-If those values are absent, administrator access is intentionally disabled.
+Administrator authorization accepts the configured build-time email/hash and
+retains the local administrator fallback configured in `AdminConfig.kt` for
+offline operation. Before release, replace local credentials with a trusted
+server-side or managed provisioning path.
 
 ## Build
 
@@ -46,6 +45,11 @@ The current Replit container has Java and Gradle but no Android SDK, so APK
 compilation cannot be completed here. Install Android SDK platform 35 and build
 tools, then run the command from `android-app/`. The project targets Android
 API 34 and compiles against platform 35.
+
+On first launch, grant Accessibility, Draw Over Other Apps, and battery
+optimization exemption. Android 13+ also prompts for notifications; selected
+OEMs expose an additional auto-start settings shortcut. The Start button stays
+disabled until the three core background permissions are granted.
 
 ## Safety boundary
 

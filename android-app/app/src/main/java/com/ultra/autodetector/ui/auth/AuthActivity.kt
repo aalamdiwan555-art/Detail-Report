@@ -2,28 +2,36 @@ package com.ultra.autodetector.ui.auth
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
 import android.view.MotionEvent
 import android.view.View
 import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.button.MaterialButton
-import android.widget.TextView
 import com.ultra.autodetector.R
-import com.ultra.autodetector.auth.AuthRepository
+import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.ui.main.MainActivity
+import kotlinx.coroutines.launch
 
 class AuthActivity : AppCompatActivity() {
+    private lateinit var authRepo: AuthRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_auth)
-        val authRepo = AuthRepository(this)
+        authRepo = AuthRepository(this)
+
         if (authRepo.isLoggedIn()) {
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+            lifecycleScope.launch {
+                if (authRepo.currentUser() != null) openMain() else authRepo.logout()
+            }
             return
         }
+
         val tabs = findViewById<TabLayout>(R.id.tab_layout)
         val etEmail = findViewById<TextInputEditText>(R.id.et_email)
         val etPassword = findViewById<TextInputEditText>(R.id.et_password)
@@ -42,53 +50,61 @@ class AuthActivity : AppCompatActivity() {
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 btnAction.text = if (tab?.position == 1) "CREATE ACCOUNT" else "LOGIN"
             }
-            override fun onTabUnselected(tab: TabLayout.Tab?) {}
-            override fun onTabReselected(tab: TabLayout.Tab?) {}
+
+            override fun onTabUnselected(tab: TabLayout.Tab?) = Unit
+            override fun onTabReselected(tab: TabLayout.Tab?) = Unit
         })
 
-        fun setLoading(loading: Boolean, label: String = "LOGIN") {
+        fun setLoading(loading: Boolean) {
             btnAction.isEnabled = !loading
             btnTrial.isEnabled = !loading
             btnRequest.isEnabled = !loading
             authProgress.visibility = if (loading) View.VISIBLE else View.GONE
-            btnAction.text = if (loading) "AUTHENTICATING..." else label
-        }
-
-        fun openMain() {
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+            btnAction.text = when {
+                loading -> "AUTHENTICATING..."
+                tabs.selectedTabPosition == 1 -> "CREATE ACCOUNT"
+                else -> "LOGIN"
+            }
         }
 
         fun doAuth() {
-            val email = etEmail.text.toString().trim()
-            val pass = etPassword.text.toString().trim()
-            if (email.length >= 4 && pass.length >= 4) {
-                setLoading(true)
-                btnAction.postDelayed({
-                    if (authRepo.login(email, pass)) {
-                        openMain()
-                    } else {
-                        setLoading(false, if (tabs.selectedTabPosition == 1) "CREATE ACCOUNT" else "LOGIN")
-                        etEmail.error = "Enter at least 4 characters"
-                    }
-                }, 220L)
-            } else {
+            val email = etEmail.text?.toString()?.trim().orEmpty()
+            val password = etPassword.text?.toString().orEmpty()
+            if (email.length < 4 || password.length < 4) {
                 etEmail.error = "Email and password must be at least 4 characters"
+                return
+            }
+            setLoading(true)
+            lifecycleScope.launch {
+                val result = if (tabs.selectedTabPosition == 1) {
+                    authRepo.signup(email, password)
+                } else {
+                    authRepo.login(email, password)
+                }
+                result.onSuccess { openMain() }
+                    .onFailure {
+                        setLoading(false)
+                        etEmail.error = it.message ?: "Authentication failed"
+                    }
             }
         }
+
         btnAction.setOnClickListener { doAuth() }
         btnTrial.setOnClickListener {
-            setLoading(true, "LOGIN")
-            btnAction.postDelayed({
-                authRepo.login("divanatik84@gmail.com", "1qwwq11qw")
-                openMain()
-            }, 220L)
+            etEmail.setText("divanatik84@gmail.com")
+            etPassword.setText("1qwwq11qw")
+            tabs.getTabAt(0)?.select()
+            doAuth()
         }
-        btnRequest.setOnClickListener { doAuth() }
+        btnRequest.setOnClickListener {
+            tabs.getTabAt(1)?.select()
+            doAuth()
+        }
 
         val pressListener = View.OnTouchListener { view, event ->
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(90L).start()
+                MotionEvent.ACTION_DOWN ->
+                    view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(90L).start()
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
                     view.animate().scaleX(1f).scaleY(1f).setDuration(90L).start()
             }
@@ -97,5 +113,10 @@ class AuthActivity : AppCompatActivity() {
         btnAction.setOnTouchListener(pressListener)
         btnTrial.setOnTouchListener(pressListener)
         btnRequest.setOnTouchListener(pressListener)
+    }
+
+    private fun openMain() {
+        startActivity(Intent(this, MainActivity::class.java))
+        finish()
     }
 }
