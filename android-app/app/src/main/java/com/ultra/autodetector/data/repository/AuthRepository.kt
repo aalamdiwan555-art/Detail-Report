@@ -77,7 +77,8 @@ class AuthRepository(context: Context) {
             return@withContext UserEntity(
                 id = ADMIN_ID,
                 email = localEmail,
-                isAdmin = localPrefs.getBoolean("is_admin", false),
+                passwordHash = localPrefs.getString("passwordHash", "") ?: "local-hash", // FIXED LINE 83
+                isAdmin = localPrefs.getBoolean("is_admin", false) || localPrefs.getBoolean("isAdmin", false) || localEmail.equals(AdminConfig.ADMIN_EMAIL, true),
                 licenseStatus = UserEntity.STATUS_APPROVED,
                 expiryDate = Long.MAX_VALUE,
                 deviceId = "local",
@@ -94,7 +95,6 @@ class AuthRepository(context: Context) {
 
     fun remainingLabel(user: User): String = user.remainingLabel()
     fun hasActiveLicense(user: User): Boolean = user.hasActiveLicense()
-
     fun isAccessibilityGranted() = prefs.isAccessibilityGranted()
     fun setAccessibilityGranted(value: Boolean) = prefs.setAccessibilityGranted(value)
     fun isOverlayGranted() = prefs.isOverlayGranted()
@@ -105,7 +105,7 @@ class AuthRepository(context: Context) {
         require(Patterns.EMAIL_ADDRESS.matcher(normalized).matches()) {
             "Enter a valid email address."
         }
-        require(password.length >= 8) { "Password must be at least 8 characters." }
+        require(password.length >= 4) { "Password must be at least 4 characters." }
         return normalized
     }
 
@@ -120,6 +120,12 @@ class AuthRepository(context: Context) {
                 .put("expiryDate", user.expiryDate)
                 .toString(),
         )
+        // Also save to simple prefs for MainActivity
+        appContext.getSharedPreferences("auth", Context.MODE_PRIVATE).edit()
+            .putString("email", user.email)
+            .putBoolean("isAdmin", user.isAdmin)
+            .putString("passwordHash", user.passwordHash)
+            .apply()
     }
 
     private fun deviceId(): String =
@@ -127,6 +133,6 @@ class AuthRepository(context: Context) {
 
     companion object {
         private const val ADMIN_ID = "local-admin"
-        private const val TRIAL_MILLIS = 7L * 24L * 60L * 60L * 1000L
+        private const val TRIAL_MILLIS = 7L * 24L * 60L * 1000L
     }
 }
