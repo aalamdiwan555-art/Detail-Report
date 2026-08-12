@@ -23,7 +23,6 @@ import com.ultra.autodetector.service.DetectionService
 import com.ultra.autodetector.service.FloatingWidgetService
 import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.auth.AuthActivity
-import com.ultra.autodetector.util.Constants
 import com.ultra.autodetector.util.TelegramHelper
 import kotlinx.coroutines.launch
 
@@ -106,3 +105,48 @@ class MainActivity : ComponentActivity() {
             else -> "Account expired"
         }
         binding.subscriptionDetails.text = account.remainingLabel()
+        binding.btnRenew.visibility = if (account.isAdmin || account.hasActiveLicense()) android.view.View.GONE else android.view.View.VISIBLE
+        binding.btnAdmin.visibility = if (account.isAdmin) android.view.View.VISIBLE else android.view.View.GONE
+        binding.detectorStatus.text = when {
+            DetectionService.isPaused -> "Detector paused"
+            DetectionService.isRunning -> "Detector running"
+            else -> "Detector ready"
+        }
+        binding.btnPause.visibility = if (DetectionService.isRunning) android.view.View.VISIBLE else android.view.View.GONE
+        binding.btnStartStop.text = if (DetectionService.isRunning) "STOP DETECTION" else "START DETECTION"
+        binding.btnStartStop.isEnabled = DetectionService.isRunning || (account.hasActiveLicense() && accessibility && overlay && capture)
+        binding.detectorError.visibility = if (!account.hasActiveLicense() && !account.isAdmin) android.view.View.VISIBLE else android.view.View.GONE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    private fun isAccessibilityEnabled(): Boolean {
+        val manager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val services = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        val component = "$packageName/${AutoClickService::class.java.name}"
+        return manager.isEnabled && services.split(':').any { it.equals(component, ignoreCase = true) }
+    }
+
+    private fun startDetection() {
+        if (projectionData == null) {
+            binding.btnScreenCapture.performClick()
+            return
+        }
+        val data = projectionData!!
+        val intent = Intent(this, DetectionService::class.java).apply {
+            action = DetectionService.ACTION_START
+            putExtra(DetectionService.EXTRA_RESULT_CODE, projectionCode)
+            putExtra(DetectionService.EXTRA_RESULT_DATA, data)
+        }
+        ContextCompat.startForegroundService(this, intent)
+        startService(Intent(this, FloatingWidgetService::class.java))
+        refreshUi()
+    }
+
+    private fun stopDetection() {
+        sendBroadcast(Intent(DetectionService.ACTION_STOP).setPackage(packageName))
+        stopService(Intent(this, FloatingWidgetService::class.java))
+        refreshUi()
+    }
+}
