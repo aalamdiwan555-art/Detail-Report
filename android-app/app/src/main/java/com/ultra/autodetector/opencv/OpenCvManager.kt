@@ -1,7 +1,7 @@
 package com.ultra.autodetector.opencv
 
 import android.graphics.Bitmap
-import android.graphics.ImageFormat
+import android.graphics.PixelFormat
 import android.media.Image
 import android.media.ImageReader
 import java.nio.ByteBuffer
@@ -36,7 +36,7 @@ object OpenCvManager {
     fun bitmapToBitmap(bitmap: Bitmap): Bitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
 
     fun createImageReader(width: Int, height: Int): ImageReader =
-        ImageReader.newInstance(width, height, ImageFormat.RGBA_8888, 2)
+        ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
 
     fun releaseBitmap(bitmap: Bitmap?) {
         if (bitmap != null && !bitmap.isRecycled) bitmap.recycle()
