@@ -71,12 +71,25 @@ class AuthRepository(context: Context) {
     }
 
     suspend fun currentUser(): User? = withContext(Dispatchers.IO) {
+        val localPrefs = appContext.getSharedPreferences("auth", Context.MODE_PRIVATE)
+        val localEmail = localPrefs.getString("email", null)
+        if (localEmail != null) {
+            return@withContext UserEntity(
+                id = ADMIN_ID,
+                email = localEmail,
+                isAdmin = localPrefs.getBoolean("is_admin", false),
+                licenseStatus = UserEntity.STATUS_APPROVED,
+                expiryDate = Long.MAX_VALUE,
+                deviceId = "local",
+            )
+        }
         val id = prefs.getSessionUid() ?: return@withContext null
         users.getById(id)?.also(::saveSession)
     }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
         prefs.clearAll()
+        appContext.getSharedPreferences("auth", Context.MODE_PRIVATE).edit().clear().apply()
     }
 
     fun remainingLabel(user: User): String = user.remainingLabel()

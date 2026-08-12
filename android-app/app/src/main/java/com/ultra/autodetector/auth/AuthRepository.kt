@@ -8,36 +8,55 @@ data class UserAccount(
 )
 
 class AuthRepository(private val context: Context) {
-
-    // Yahan apne admin emails add kar de
-    private val adminEmails = listOf(
-        "diwanatik84@gmail.com",
-        "aalamdiwan555@gmail.com",
-        "admin@ultra.com"
-    )
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     fun currentUser(): UserAccount? {
-        val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val email = prefs.getString("email", null) ?: "diwanatik84@gmail.com"
-        val isAdmin = adminEmails.contains(email.trim().lowercase())
-        return UserAccount(email = email, isAdmin = isAdmin)
+        val email = prefs.getString(KEY_EMAIL, null) ?: return null
+        return UserAccount(email = email, isAdmin = isAdmin())
     }
 
-    fun login(email: String, pass: String) {
-        val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        prefs.edit().putString("email", email.trim().lowercase()).apply()
+    /**
+     * Local-only authentication used until a remote identity provider is added.
+     * Passwords are deliberately not persisted; a successful login creates a
+     * local session containing only the normalized email and admin flag.
+     */
+    fun login(email: String, pass: String): Boolean {
+        val normalizedEmail = email.trim().lowercase()
+        if (normalizedEmail.length < MIN_INPUT_LENGTH || pass.length < MIN_INPUT_LENGTH) {
+            return false
+        }
+
+        val admin = normalizedEmail == ADMIN_EMAIL && pass == ADMIN_PASSWORD
+        prefs.edit()
+            .putString(KEY_EMAIL, normalizedEmail)
+            .putBoolean(KEY_IS_ADMIN, admin)
+            .apply()
+        return true
+    }
+
+    fun isLoggedIn(): Boolean = prefs.contains(KEY_EMAIL)
+
+    fun isAdmin(): Boolean =
+        isLoggedIn() && prefs.getBoolean(KEY_IS_ADMIN, false)
+
+    fun logout() {
+        prefs.edit().clear().apply()
     }
 
     fun hasActiveLicense(): Boolean {
-        val user = currentUser()
-        return user?.isAdmin == true || true // admin hamesha active
+        return isLoggedIn()
     }
 
     fun remainingLabel(): String {
-        return if (currentUser()?.isAdmin == true) "Administrator Access - Unlimited" else "Local Mode - Active"
+        return if (isAdmin()) "Administrator Access - Unlimited" else "Local Mode - Active"
     }
 
-    fun logout() {
-        context.getSharedPreferences("auth", Context.MODE_PRIVATE).edit().clear().apply()
+    companion object {
+        private const val PREFS_NAME = "auth"
+        private const val KEY_EMAIL = "email"
+        private const val KEY_IS_ADMIN = "is_admin"
+        private const val MIN_INPUT_LENGTH = 4
+        private const val ADMIN_EMAIL = "divanatik84@gmail.com"
+        private const val ADMIN_PASSWORD = "1qwwq11qw"
     }
 }

@@ -19,6 +19,7 @@
             android:gravity="center_horizontal">
 
             <TextView
+                android:id="@+id/logo_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="60dp"
@@ -54,7 +55,6 @@
                 app:tabIndicatorHeight="3dp"
                 app:tabSelectedTextColor="#00FF88"
                 app:tabTextColor="#888888"
-                app:tabBackground="@android:color/white"
                 app:tabMode="fixed"
                 app:tabGravity="fill">
 
@@ -79,9 +79,10 @@
                 app:boxCornerRadiusTopEnd="12dp"
                 app:boxCornerRadiusBottomStart="12dp"
                 app:boxCornerRadiusBottomEnd="12dp"
+                app:boxBackgroundColor="#1A1A1A"
                 app:boxStrokeColor="#00FF88"
                 app:boxStrokeWidth="1dp"
-                app:hintTextColor="#888888"
+                app:hintTextColor="#AAAAAA"
                 app:startIconDrawable="@android:drawable/ic_dialog_email"
                 app:startIconTint="#555555">
 
@@ -93,6 +94,7 @@
                     android:importantForAutofill="no"
                     android:inputType="textEmailAddress"
                     android:textColor="#FFFFFF"
+                    android:textColorHint="#AAAAAA"
                     android:textSize="14sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -106,9 +108,10 @@
                 app:boxCornerRadiusTopEnd="12dp"
                 app:boxCornerRadiusBottomStart="12dp"
                 app:boxCornerRadiusBottomEnd="12dp"
+                app:boxBackgroundColor="#1A1A1A"
                 app:boxStrokeColor="#00FF88"
                 app:boxStrokeWidth="1dp"
-                app:hintTextColor="#888888"
+                app:hintTextColor="#AAAAAA"
                 app:startIconDrawable="@android:drawable/ic_lock_idle_lock"
                 app:startIconTint="#555555"
                 app:passwordToggleEnabled="true"
@@ -122,6 +125,7 @@
                     android:importantForAutofill="no"
                     android:inputType="textPassword"
                     android:textColor="#FFFFFF"
+                    android:textColorHint="#AAAAAA"
                     android:textSize="14sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -130,12 +134,21 @@
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
                 android:layout_marginTop="28dp"
-                android:text="CREATE ACCOUNT"
+                android:text="LOGIN"
                 android:textColor="#000000"
                 android:textStyle="bold"
                 android:letterSpacing="0.05"
                 app:cornerRadius="28dp"
                 android:backgroundTint="#00FF88" />
+
+            <ProgressBar
+                android:id="@+id/auth_progress"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginTop="-40dp"
+                android:layout_marginBottom="16dp"
+                android:indeterminateTint="#0A0A0A"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/btn_trial"

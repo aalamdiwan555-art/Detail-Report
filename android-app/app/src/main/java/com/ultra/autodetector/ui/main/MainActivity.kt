@@ -10,7 +10,6 @@ import android.view.View
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.ultra.autodetector.R
 import com.ultra.autodetector.auth.AuthRepository
@@ -18,7 +17,6 @@ import com.ultra.autodetector.databinding.ActivityMainBinding
 import com.ultra.autodetector.service.DetectionService
 import com.ultra.autodetector.service.FloatingWidgetService
 import com.ultra.autodetector.ui.auth.AuthActivity
-import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -65,7 +63,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        lifecycleScope.launch { refreshUi() }
+        refreshUi()
     }
 
     private fun refreshUi() {
@@ -102,6 +100,7 @@ class MainActivity : AppCompatActivity() {
         val canStart = isRunning || (hasLicense && accessibilityEnabled && overlayEnabled)
         binding.btnStartStop.isEnabled = canStart
         binding.btnStartStop.text = if (isRunning) "STOP DETECTION" else "START DETECTION"
+        binding.btnAdmin.visibility = if (auth.isAdmin()) View.VISIBLE else View.GONE
     }
 
     private fun isAccessibilityEnabled(): Boolean {

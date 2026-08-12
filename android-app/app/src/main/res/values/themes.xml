@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.UltraAutoDetector" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.UltraAutoDetector" parent="Theme.MaterialComponents.NoActionBar">
         <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@color/ink</item>
         <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:textColorPrimary">@android:color/white</item>
+        <item name="android:textColorSecondary">@color/muted</item>
         <item name="android:colorAccent">@color/primary</item>
         <item name="android:navigationBarColor">@color/ink</item>
         <item name="android:statusBarColor">@color/ink</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="colorPrimary">@color/primary</item>
         <item name="colorAccent">@color/primary</item>
+        <item name="colorSurface">@color/card</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>
