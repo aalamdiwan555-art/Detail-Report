@@ -32,6 +32,11 @@
 <include layout="@layout/permission_row_capture" />
     <include layout="@layout/permission_row_background" />
 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="DETECTOR" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
+ <LinearLayout android:id="@+id/active_templates_card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_glass_card" android:orientation="vertical" android:padding="16dp">
+ <TextView android:id="@+id/active_templates_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Found 0 templates active" android:textColor="@android:color/white" android:textSize="14sp" android:textStyle="bold" />
+ <TextView android:id="@+id/active_templates_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="No active templates yet. Upload one from Admin Panel." android:textColor="@color/muted" android:textSize="12sp" />
+ <LinearLayout android:id="@+id/active_templates_list" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="vertical" />
+ </LinearLayout>
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_glass_card" android:orientation="vertical" android:padding="16dp">
 <TextView android:id="@+id/detector_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ready" android:textColor="@android:color/white" android:textSize="14sp" android:textStyle="bold" />
 <TextView android:id="@+id/detector_error" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/error" android:visibility="gone" />

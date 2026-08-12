@@ -8,23 +8,23 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.ImageReader
-import android.media.projection.MediaProjectionManager
+import android.graphics.Rect
 import android.os.Build
 import android.os.IBinder
-import android.hardware.display.DisplayManager
-import android.hardware.display.VirtualDisplay
-import android.graphics.PixelFormat
+import android.util.LruCache
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import android.content.pm.ServiceInfo
 import com.ultra.autodetector.R
 import com.ultra.autodetector.UltraAutoDetectorApp
 import com.ultra.autodetector.data.repository.TemplateRepository
+import com.ultra.autodetector.data.repository.TemplateSyncManager
 import com.ultra.autodetector.data.local.EncryptedPrefsManager
-import com.ultra.autodetector.opencv.OpenCvManager
-import com.ultra.autodetector.opencv.TemplateMatcher
+import com.ultra.autodetector.detector.ScreenCaptureEngine
+import com.ultra.autodetector.detector.TemplateMatcher
 import com.ultra.autodetector.ui.main.MainActivity
 import com.ultra.autodetector.util.Constants
 import com.ultra.autodetector.util.HumanizationEngine
@@ -33,27 +33,35 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
 
 class DetectionService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
-    private var projection: android.media.projection.MediaProjection? = null
-    private var display: VirtualDisplay? = null
-    private var reader: ImageReader? = null
+    private var captureEngine: ScreenCaptureEngine? = null
     private var paused = false
     private lateinit var prefs: EncryptedPrefsManager
-    private val matcher = TemplateMatcher()
-    private val templates = mutableListOf<LoadedTemplate>()
+    private lateinit var matcher: TemplateMatcher
+    private val templates = mutableListOf<TemplateMatcher.LoadedTemplate>()
+    private val templateLock = Any()
+    private val analyzing = AtomicBoolean(false)
+    private var frameNumber = 0
+    private val bitmapCache = object : LruCache<String, Bitmap>(MAX_TEMPLATES) {
+        override fun entryRemoved(evicted: Boolean, key: String, oldValue: Bitmap, newValue: Bitmap?) {
+            if (oldValue !== newValue && !oldValue.isRecycled) oldValue.recycle()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         prefs = EncryptedPrefsManager(this)
+        matcher = TemplateMatcher(this)
         val filter = IntentFilter().apply {
             addAction(ACTION_STOP)
             addAction(ACTION_PAUSE)
+            addAction(Constants.ACTION_TEMPLATE_UPDATED)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(controlReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -76,68 +84,89 @@ class DetectionService : Service() {
                 if (data == null || resultCode != Activity.RESULT_OK) stopDetection()
                 else startDetection(resultCode, data)
             }
+            Constants.ACTION_TEMPLATE_UPDATED -> scope.launch { loadTemplates() }
         }
         return START_STICKY
     }
 
     private fun startDetection(resultCode: Int, data: Intent) {
-        if (projection != null) return
+        if (isRunning) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         } else startForeground(NOTIFICATION_ID, notification())
-        val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        projection = manager.getMediaProjection(resultCode, data)
-        val metrics = resources.displayMetrics
-        reader = ImageReader.newInstance(metrics.widthPixels, metrics.heightPixels, PixelFormat.RGBA_8888, 2)
-        display = projection?.createVirtualDisplay(
-            "UltraAutoDetectorCapture",
-            metrics.widthPixels,
-            metrics.heightPixels,
-            metrics.densityDpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            reader?.surface,
-            null,
-            null,
-        )
         paused = false
         isPaused = false
         isRunning = true
         prefs.setDetectorWasRunning(true)
-        job = scope.launch {
-            loadTemplates()
-            while (isActive) {
-                if (!paused) {
-                    reader?.acquireLatestImage()?.use { image ->
-                        OpenCvManager.imageToBitmap(image)?.let { bitmap ->
-                            analyze(bitmap)
-                            OpenCvManager.releaseBitmap(bitmap)
+        frameNumber = 0
+        job = scope.launch { loadTemplates() }
+        captureEngine = ScreenCaptureEngine(this).also { engine ->
+            if (!engine.start(resultCode, data) { frame ->
+                    if (paused || !isRunning) {
+                        frame.bitmap.recycle()
+                        return@start
+                    }
+                    val shouldAnalyze = frame.changed && analyzing.compareAndSet(false, true)
+                    if (!shouldAnalyze) {
+                        frame.bitmap.recycle()
+                        return@start
+                    }
+                    frameNumber++
+                    scope.launch {
+                        try {
+                            analyze(frame, runText = frameNumber % TEXT_EVERY_N_FRAMES == 0)
+                        } finally {
+                            if (!frame.bitmap.isRecycled) frame.bitmap.recycle()
+                            analyzing.set(false)
                         }
                     }
-                }
-                delay(33L)
+                }) {
+                stopDetection()
             }
         }
     }
 
     private suspend fun loadTemplates() {
-        templates.forEach { OpenCvManager.releaseBitmap(it.bitmap) }
-        templates.clear()
-        TemplateRepository(this).listActive().take(MAX_TEMPLATES).forEach { template ->
-            BitmapFactory.decodeFile(template.filePath)?.let { templates += LoadedTemplate(template, it) }
+        val active = TemplateRepository(this).listActive().take(MAX_TEMPLATES)
+        synchronized(templateLock) {
+            templates.clear()
+            bitmapCache.evictAll()
+            active.forEach { template ->
+                val sharedFile = TemplateSyncManager.sharedFile(this, template.templateId)
+                val sourcePath = sharedFile.takeIf { it.exists() }?.absolutePath ?: template.filePath
+                val bitmap = bitmapCache.get(template.templateId)
+                    ?: BitmapFactory.decodeFile(sourcePath)?.also {
+                        bitmapCache.put(template.templateId, it)
+                    }
+                bitmap?.let {
+                    templates += TemplateMatcher.LoadedTemplate(template, it)
+                }
+            }
         }
     }
 
-    private fun analyze(screen: android.graphics.Bitmap) {
-        if (templates.isEmpty() || !HumanizationEngine.isCooldownPassed()) return
-        val best = templates.asSequence()
-            .map { it to matcher.match(screen, it.bitmap, it.template.confidenceThreshold, TemplateMatcher.MAX_CANDIDATES_PER_FRAME) }
-            .filter { it.second.found }
-            .maxByOrNull { it.second.confidence } ?: return
+    private fun analyze(frame: ScreenCaptureEngine.Frame, runText: Boolean) {
+        val best = synchronized(templateLock) {
+            val activeTemplates = templates.toList()
+            if (activeTemplates.isEmpty() || !HumanizationEngine.isCooldownPassed()) return
+            matcher.findBest(frame.bitmap, activeTemplates, runText)
+        } ?: return
+        val screenRect = Rect(
+            (best.rect.left * frame.scaleX).roundToInt(),
+            (best.rect.top * frame.scaleY).roundToInt(),
+            (best.rect.right * frame.scaleX).roundToInt(),
+            (best.rect.bottom * frame.scaleY).roundToInt(),
+        )
         sendBroadcast(
             Intent(Constants.ACTION_PERFORM_CLICK).setPackage(packageName)
-                .putExtra(Constants.EXTRA_CLICK_X, best.second.centerX)
-                .putExtra(Constants.EXTRA_CLICK_Y, best.second.centerY),
+                .putExtra(Constants.EXTRA_CLICK_X, screenRect.exactCenterX())
+                .putExtra(Constants.EXTRA_CLICK_Y, screenRect.exactCenterY())
+                .putExtra(Constants.EXTRA_CLICK_LEFT, screenRect.left)
+                .putExtra(Constants.EXTRA_CLICK_TOP, screenRect.top)
+                .putExtra(Constants.EXTRA_CLICK_WIDTH, screenRect.width())
+                .putExtra(Constants.EXTRA_CLICK_HEIGHT, screenRect.height()),
         )
+        Log.i(TAG, "Template ${best.template.name} matched by ${best.source} at ${screenRect}")
         HumanizationEngine.recordClick()
     }
 
@@ -145,14 +174,12 @@ class DetectionService : Service() {
         sendBroadcast(Intent(AutoClickService.ACTION_STOP_CLICKING).setPackage(packageName))
         job?.cancel()
         job = null
-        reader?.close()
-        reader = null
-        display?.release()
-        display = null
-        projection?.stop()
-        projection = null
-        templates.forEach { OpenCvManager.releaseBitmap(it.bitmap) }
-        templates.clear()
+        captureEngine?.close()
+        captureEngine = null
+        synchronized(templateLock) {
+            templates.clear()
+            bitmapCache.evictAll()
+        }
         isRunning = false
         isPaused = false
         if (::prefs.isInitialized) prefs.setDetectorWasRunning(false)
@@ -173,6 +200,7 @@ class DetectionService : Service() {
 
     override fun onDestroy() {
         stopDetection()
+        matcher.close()
         runCatching { unregisterReceiver(controlReceiver) }
         scope.cancel()
         super.onDestroy()
@@ -183,16 +211,13 @@ class DetectionService : Service() {
             when (intent?.action) {
                 ACTION_STOP -> stopDetection()
                 ACTION_PAUSE -> { paused = intent.getBooleanExtra(EXTRA_PAUSED, true); isPaused = paused }
+                Constants.ACTION_TEMPLATE_UPDATED -> scope.launch { loadTemplates() }
             }
         }
     }
 
-    private data class LoadedTemplate(
-        val template: com.ultra.autodetector.data.model.Template,
-        val bitmap: android.graphics.Bitmap,
-    )
-
     companion object {
+        private const val TAG = "DetectionService"
         const val ACTION_START = "com.ultra.autodetector.action.START"
         const val ACTION_STOP = "com.ultra.autodetector.action.STOP"
         const val ACTION_PAUSE = "com.ultra.autodetector.action.PAUSE"
@@ -201,6 +226,7 @@ class DetectionService : Service() {
         const val EXTRA_PAUSED = "paused"
         private const val NOTIFICATION_ID = 101
         private const val MAX_TEMPLATES = 20
+        private const val TEXT_EVERY_N_FRAMES = 3
         @Volatile var isRunning = false
             private set
         @Volatile var isPaused = false

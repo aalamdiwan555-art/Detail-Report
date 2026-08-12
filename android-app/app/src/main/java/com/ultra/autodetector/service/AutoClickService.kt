@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Path
+import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +19,7 @@ import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.NotificationCompat
 import com.ultra.autodetector.R
 import com.ultra.autodetector.UltraAutoDetectorApp
+import com.ultra.autodetector.detector.FastClicker
 import com.ultra.autodetector.opencv.TextTargetDetector
 import com.ultra.autodetector.ui.main.MainActivity
 import com.ultra.autodetector.util.Constants
@@ -35,10 +37,12 @@ class AutoClickService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private var wakeLock: PowerManager.WakeLock? = null
     private var receiverRegistered = false
+    private lateinit var fastClicker: FastClicker
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        fastClicker = FastClicker(this, handler)
         createForegroundNotification()
         registerClickReceiver()
     }
@@ -56,7 +60,7 @@ class AutoClickService : AccessibilityService() {
         if (!HumanizationEngine.isCooldownPassed()) return
 
         val match = TextTargetDetector.find(rootInActiveWindow) ?: return
-        performUserRequestedClick(match.centerX, match.centerY)
+        performUserRequestedClick(Rect(match.centerX.toInt(), match.centerY.toInt(), match.centerX.toInt() + 1, match.centerY.toInt() + 1))
         HumanizationEngine.recordClick()
     }
 
@@ -68,30 +72,24 @@ class AutoClickService : AccessibilityService() {
      * all supported Android versions and behaves as a tap.
      */
     fun performUserRequestedClick(x: Float, y: Float) {
+        performUserRequestedClick(Rect(x.toInt(), y.toInt(), x.toInt() + 1, y.toInt() + 1))
+    }
+
+    fun performUserRequestedClick(rect: Rect) {
         val delay = HumanizationEngine.getMicroDelay().coerceAtLeast(0L)
         handler.postDelayed({
             val width = resources.displayMetrics.widthPixels
             val height = resources.displayMetrics.heightPixels
             if (width <= 0 || height <= 0) return@postDelayed
 
-            val safeX = x.takeIf { it.isFinite() }?.coerceIn(0f, (width - 1).toFloat()) ?: return@postDelayed
-            val safeY = y.takeIf { it.isFinite() }?.coerceIn(0f, (height - 1).toFloat()) ?: return@postDelayed
-            acquireWakeLock()
-
-            val path = Path().apply { moveTo(safeX, safeY) }
-            val gesture = GestureDescription.Builder()
-                .addStroke(GestureDescription.StrokeDescription(path, 0L, 1L))
-                .build()
-            dispatchGesture(
-                gesture,
-                object : GestureResultCallback() {
-                    override fun onCancelled(gestureDescription: GestureDescription?) {
-                        // Keep the wake lock while detection is active. It is
-                        // released by STOP_CLICKING or service destruction.
-                    }
-                },
-                handler,
+            val safeRect = Rect(
+                rect.left.coerceIn(0, width - 1),
+                rect.top.coerceIn(0, height - 1),
+                rect.right.coerceIn(1, width),
+                rect.bottom.coerceIn(1, height),
             )
+            acquireWakeLock()
+            fastClicker.click(safeRect)
         }, delay)
     }
 
@@ -128,6 +126,7 @@ class AutoClickService : AccessibilityService() {
         val filter = IntentFilter().apply {
             addAction(Constants.ACTION_PERFORM_CLICK)
             addAction(ACTION_STOP_CLICKING)
+            addAction(Constants.ACTION_TEMPLATE_UPDATED)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(clickReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -142,10 +141,22 @@ class AutoClickService : AccessibilityService() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 Constants.ACTION_PERFORM_CLICK -> performUserRequestedClick(
-                    intent.getFloatExtra(Constants.EXTRA_CLICK_X, 0f),
-                    intent.getFloatExtra(Constants.EXTRA_CLICK_Y, 0f),
+                    Rect(
+                        intent.getIntExtra(Constants.EXTRA_CLICK_LEFT, intent.getFloatExtra(Constants.EXTRA_CLICK_X, 0f).toInt()),
+                        intent.getIntExtra(Constants.EXTRA_CLICK_TOP, intent.getFloatExtra(Constants.EXTRA_CLICK_Y, 0f).toInt()),
+                        intent.getIntExtra(Constants.EXTRA_CLICK_LEFT, intent.getFloatExtra(Constants.EXTRA_CLICK_X, 0f).toInt()) +
+                            intent.getIntExtra(Constants.EXTRA_CLICK_WIDTH, 1),
+                        intent.getIntExtra(Constants.EXTRA_CLICK_TOP, intent.getFloatExtra(Constants.EXTRA_CLICK_Y, 0f).toInt()) +
+                            intent.getIntExtra(Constants.EXTRA_CLICK_HEIGHT, 1),
+                    ),
                 )
                 ACTION_STOP_CLICKING -> stopClicking()
+                Constants.ACTION_TEMPLATE_UPDATED -> {
+                    // DetectionService also reloads its Room-backed cache. This
+                    // receiver keeps the accessibility side immediately aware
+                    // of a new global template generation.
+                    android.util.Log.i(TAG, "Template updated; detector cache will reload")
+                }
             }
         }
     }
@@ -172,12 +183,14 @@ class AutoClickService : AccessibilityService() {
         stopClicking()
         if (receiverRegistered) runCatching { unregisterReceiver(clickReceiver) }
         receiverRegistered = false
+        if (::fastClicker.isInitialized) fastClicker.close()
         if (instance === this) instance = null
         super.onDestroy()
     }
 
     companion object {
         const val ACTION_STOP_CLICKING = "com.ultra.autodetector.STOP_CLICKING"
+        private const val TAG = "AutoClickService"
         private const val NOTIFICATION_ID = 102
 
         @Volatile

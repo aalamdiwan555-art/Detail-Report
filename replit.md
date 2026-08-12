@@ -8,7 +8,8 @@ template detection, license handling, and explicit gesture controls.
 ### Android app
 
 - Open `android-app/` in Android Studio with Android SDK platform 35.
-- The app uses a private on-device Room/SQLite database and has no cloud dependency.
+- The app uses a private on-device Room/SQLite database and local-first template
+  synchronization; there is no cross-device cloud provider configured yet.
 - Build with `./gradlew assembleDebug` from `android-app/` on a machine with Android SDK platform 35.
 - Replit can validate Gradle configuration, but this container does not include the Android SDK, so APK compilation must run on an Android development machine.
 
@@ -16,7 +17,9 @@ The app currently uses local database mode:
 
 - Regular accounts are created as pending and require admin approval.
 - Accounts, licenses, templates, and session state are stored in the device-local Room database.
-- Local mode is not production authentication and does not synchronize between devices.
+- Local mode is not production authentication. Template uploads are copied to a
+  shared app-private directory and broadcast to running detector services on the
+  same device; Firebase/Supabase cross-device delivery still needs to be added.
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
@@ -46,7 +49,8 @@ The app currently uses local database mode:
 - `android-app/app/src/main/java/com/ultra/autodetector/service/` — capture, gesture, and floating-widget services
 - `android-app/app/src/main/java/com/ultra/autodetector/data/local/` — account, notice, template, and encrypted preference state
 - Admin template uploads are copied into app-private PNG files and indexed in
-  Room before the detector loads them.
+  Room before the detector loads them. `TEMPLATE_UPDATED` invalidates the
+  detector cache immediately, with WorkManager retrying the local notification.
 - `docs/ultra-auto-detector-blueprint-report.md` — security and platform review of the uploaded blueprint
 
 ## Architecture decisions

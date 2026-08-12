@@ -24,6 +24,7 @@ object Constants {
     const val KEY_SESSION_UID = "session_uid"
 
     const val ACTION_PERFORM_CLICK = "com.ultra.autodetector.PERFORM_CLICK"
+    const val ACTION_TEMPLATE_UPDATED = "com.ultra.autodetector.TEMPLATE_UPDATED"
     const val ACTION_START_DETECTION = "com.ultra.autodetector.START_DETECTION"
     const val ACTION_STOP_DETECTION = "com.ultra.autodetector.STOP_DETECTION"
     const val ACTION_PAUSE_DETECTION = "com.ultra.autodetector.PAUSE_DETECTION"
@@ -31,6 +32,11 @@ object Constants {
     const val ACTION_HIDE_FLOATING_WIDGET = "com.ultra.autodetector.HIDE_FLOATING_WIDGET"
     const val EXTRA_CLICK_X = "click_x"
     const val EXTRA_CLICK_Y = "click_y"
+    const val EXTRA_CLICK_LEFT = "click_left"
+    const val EXTRA_CLICK_TOP = "click_top"
+    const val EXTRA_CLICK_WIDTH = "click_width"
+    const val EXTRA_CLICK_HEIGHT = "click_height"
+    const val EXTRA_TEMPLATE_ID = "template_id"
     const val REQUEST_MEDIA_PROJECTION = 1001
     const val REQUEST_OVERLAY_PERMISSION = 1002
     const val REQUEST_TEMPLATE_IMAGE = 1003

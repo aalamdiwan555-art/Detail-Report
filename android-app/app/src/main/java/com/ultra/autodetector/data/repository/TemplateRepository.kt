@@ -45,7 +45,10 @@ class TemplateRepository(context: Context) {
                     description.trim(),
                     destination.absolutePath,
                     createdBy = createdBy,
-                ).also { dao.insert(it) }
+                ).also {
+                    dao.insert(it)
+                    TemplateSyncManager(appContext).sync(it)
+                }
             } catch (error: Throwable) {
                 destination.delete()
                 throw error
@@ -63,4 +66,6 @@ class TemplateRepository(context: Context) {
     companion object {
         private const val MAX_TEMPLATE_DIMENSION = 4_096
     }
+
+    suspend fun getActiveTemplates(): List<Template> = listActive()
 }
