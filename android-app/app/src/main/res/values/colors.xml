@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="transparent">#00000000</color>
+    <color name="ink">#08121B</color>
+    <color name="surface_blue">#102532</color>
+    <color name="teal">#56D6C8</color>
+    <color name="muted">#8EA5B5</color>
+    <color name="warning">#FFB454</color>
 </resources>

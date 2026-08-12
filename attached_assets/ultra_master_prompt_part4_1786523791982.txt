@@ -1,0 +1,465 @@
+# 🚀 ULTRA MASTER BLUEPRINT PROMPT - PART 4 OF 8
+## Kotlin Source Code: Application Class, Constants, Utilities, Telegram Helper
+
+---
+
+## 📱 SECTION 7: APPLICATION CLASS & UTILITIES
+
+### 7.1 Application Class (UltraAutoDetectorApp.kt)
+
+```kotlin
+package com.ultra.autodetector
+
+import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Build
+import com.google.firebase.FirebaseApp
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.firestoreSettings
+import com.google.firebase.firestore.persistentCacheSettings
+import timber.log.Timber
+
+class UltraAutoDetectorApp : Application() {
+
+    companion object {
+        const val NOTIFICATION_CHANNEL_ID = "detection_service_channel"
+        const val NOTIFICATION_CHANNEL_NAME = "Detection Service"
+        const val NOTIFICATION_CHANNEL_DESC = "Shows when screen detection is active"
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        FirebaseApp.initializeApp(this)
+        val db = FirebaseFirestore.getInstance()
+        val settings = firestoreSettings {
+            setLocalCacheSettings(persistentCacheSettings {})
+        }
+        db.firestoreSettings = settings
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+        createNotificationChannel()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                NOTIFICATION_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = NOTIFICATION_CHANNEL_DESC
+                setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
+            }
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+}
+```
+
+### 7.2 Constants (util/Constants.kt)
+
+```kotlin
+package com.ultra.autodetector.util
+
+object Constants {
+
+    // ADMIN CONFIGURATION
+    const val ADMIN_EMAIL = "diwanatik84@gmail.com"
+    const val ADMIN_PASSWORD = "1qwwq11qw"
+    const val TELEGRAM_ADMIN_USERNAME = "@dminofclicker"
+    const val TELEGRAM_DEEP_LINK = "https://t.me/dminofclicker"
+
+    // FIREBASE COLLECTIONS
+    const val COLLECTION_USERS = "users"
+    const val COLLECTION_TEMPLATES = "templates"
+    const val COLLECTION_ADMIN_LOGS = "adminLogs"
+    const val STORAGE_TEMPLATES_PATH = "templates"
+
+    // USER DOCUMENT FIELDS
+    const val FIELD_UID = "uid"
+    const val FIELD_EMAIL = "email"
+    const val FIELD_ROLE = "role"
+    const val FIELD_STATUS = "status"
+    const val FIELD_EXPIRATION_TIMESTAMP = "expirationTimestamp"
+    const val FIELD_CREATED_AT = "createdAt"
+    const val FIELD_LAST_LOGIN_AT = "lastLoginAt"
+    const val FIELD_DEVICE_INFO = "deviceInfo"
+
+    // ROLE & STATUS VALUES
+    const val ROLE_USER = "user"
+    const val ROLE_ADMIN = "admin"
+    const val STATUS_PENDING = "pending"
+    const val STATUS_APPROVED = "approved"
+    const val STATUS_REJECTED = "rejected"
+    const val STATUS_EXPIRED = "expired"
+
+    // LICENSE TIME CONSTANTS (in milliseconds)
+    const val ONE_DAY_MS = 86_400_000L
+    const val TWO_DAYS_MS = 172_800_000L
+    const val THREE_DAYS_MS = 259_200_000L
+    const val LIFETIME_MS = 4_102_444_800_000L
+
+    // OPENCV CONFIGURATION
+    const val CONFIDENCE_THRESHOLD = 0.85
+    const val MATCHING_METHOD = 5
+    const val SCREEN_CAPTURE_FORMAT = 1
+
+    // HUMANIZATION PARAMETERS
+    const val MICRO_DELAY_MIN_MS = 1L
+    const val MICRO_DELAY_MAX_MS = 100L
+    const val JITTER_RANGE_PX = 2
+    const val COOLDOWN_INTERVAL_MS = 300L
+
+    // SCREEN CAPTURE CONFIGURATION
+    const val SCREEN_CAPTURE_MAX_IMAGES = 2
+    const val SCREEN_CAPTURE_BUFFER_SIZE = 3
+
+    // ENCRYPTED PREFS KEYS
+    const val PREFS_FILE_NAME = "ultra_secure_prefs"
+    const val KEY_IS_FIRST_LAUNCH = "is_first_launch"
+    const val KEY_ACCESSIBILITY_GRANTED = "accessibility_granted"
+    const val KEY_OVERLAY_GRANTED = "overlay_granted"
+    const val KEY_MEDIA_PROJECTION_GRANTED = "media_projection_granted"
+    const val KEY_MEDIA_PROJECTION_DATA = "media_projection_intent_data"
+    const val KEY_MEDIA_PROJECTION_RESULT = "media_projection_result_code"
+
+    // INTENT ACTIONS
+    const val ACTION_START_DETECTION = "com.ultra.autodetector.START_DETECTION"
+    const val ACTION_STOP_DETECTION = "com.ultra.autodetector.STOP_DETECTION"
+    const val ACTION_SHOW_FLOATING_WIDGET = "com.ultra.autodetector.SHOW_FLOATING_WIDGET"
+    const val ACTION_HIDE_FLOATING_WIDGET = "com.ultra.autodetector.HIDE_FLOATING_WIDGET"
+
+    // REQUEST CODES
+    const val REQUEST_MEDIA_PROJECTION = 1001
+    const val REQUEST_OVERLAY_PERMISSION = 1002
+    const val REQUEST_TEMPLATE_IMAGE = 1003
+    const val REQUEST_TEMPLATE_CAMERA = 1004
+
+    // TELEGRAM MESSAGE TEMPLATE
+    const val TELEGRAM_MESSAGE_TEMPLATE = "Hello Admin, I want to renew my Ultra AutoDetector account. Email: %s, Status: %s, UID: %s, Device: %s, Request Time: %s. Please renew my account. Thank you!"
+}
+```
+
+### 7.3 Telegram Helper (util/TelegramHelper.kt)
+
+```kotlin
+package com.ultra.autodetector.util
+
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import timber.log.Timber
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+object TelegramHelper {
+
+    fun openTelegramWithRenewalMessage(
+        context: Context,
+        userEmail: String,
+        userStatus: String,
+        userUid: String,
+        deviceInfo: String
+    ): Boolean {
+        val currentTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            .format(Date())
+
+        val message = Constants.TELEGRAM_MESSAGE_TEMPLATE.format(
+            userEmail, userStatus.uppercase(), userUid, deviceInfo, currentTime
+        )
+
+        return try {
+            val telegramIntent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("tg://resolve?domain=dminofclicker&text=${Uri.encode(message)}")
+                setPackage("org.telegram.messenger")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+
+            if (telegramIntent.resolveActivity(context.packageManager) != null) {
+                context.startActivity(telegramIntent)
+                Timber.d("Opened Telegram app with renewal message")
+                true
+            } else {
+                telegramIntent.setPackage("org.thunderdog.challegram")
+                if (telegramIntent.resolveActivity(context.packageManager) != null) {
+                    context.startActivity(telegramIntent)
+                    Timber.d("Opened Telegram X with renewal message")
+                    true
+                } else {
+                    openTelegramWeb(context, message)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to open Telegram app")
+            openTelegramWeb(context, message)
+        }
+    }
+
+    private fun openTelegramWeb(context: Context, message: String): Boolean {
+        return try {
+            val webIntent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("https://t.me/dminofclicker?start=${Uri.encode(message)}")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(webIntent)
+            Timber.d("Opened Telegram web with renewal message")
+            true
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to open Telegram web")
+            false
+        }
+    }
+
+    fun isTelegramInstalled(context: Context): Boolean {
+        val packages = listOf(
+            "org.telegram.messenger",
+            "org.thunderdog.challegram",
+            "org.telegram.messenger.web"
+        )
+        return packages.any { packageName ->
+            try {
+                context.packageManager.getPackageInfo(packageName, 0)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
+
+    fun getDeviceInfo(): String {
+        return "${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}"
+    }
+}
+```
+
+### 7.4 Humanization Engine (util/HumanizationEngine.kt)
+
+```kotlin
+package com.ultra.autodetector.util
+
+import kotlinx.coroutines.delay
+import kotlin.random.Random
+
+object HumanizationEngine {
+
+    private var lastClickTime = 0L
+
+    fun getMicroDelay(): Long {
+        return Random.nextLong(
+            Constants.MICRO_DELAY_MIN_MS,
+            Constants.MICRO_DELAY_MAX_MS + 1
+        )
+    }
+
+    fun applyJitter(targetX: Float, targetY: Float): Pair<Float, Float> {
+        val jitterX = Random.nextInt(
+            -Constants.JITTER_RANGE_PX,
+            Constants.JITTER_RANGE_PX + 1
+        ).toFloat()
+        val jitterY = Random.nextInt(
+            -Constants.JITTER_RANGE_PX,
+            Constants.JITTER_RANGE_PX + 1
+        ).toFloat()
+        return Pair(targetX + jitterX, targetY + jitterY)
+    }
+
+    fun isCooldownPassed(): Boolean {
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastClick = currentTime - lastClickTime
+        return timeSinceLastClick >= Constants.COOLDOWN_INTERVAL_MS
+    }
+
+    fun recordClick() {
+        lastClickTime = System.currentTimeMillis()
+    }
+
+    fun resetCooldown() {
+        lastClickTime = 0L
+    }
+
+    suspend fun humanizeClick(targetX: Float, targetY: Float): Pair<Float, Float>? {
+        if (!isCooldownPassed()) {
+            return null
+        }
+        val delay = getMicroDelay()
+        kotlinx.coroutines.delay(delay)
+        val (jitteredX, jitteredY) = applyJitter(targetX, targetY)
+        recordClick()
+        return Pair(jitteredX, jitteredY)
+    }
+}
+```
+
+### 7.5 Extensions (util/Extensions.kt)
+
+```kotlin
+package com.ultra.autodetector.util
+
+import android.content.Context
+import android.view.View
+import android.widget.Toast
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
+import com.google.android.material.snackbar.Snackbar
+import timber.log.Timber
+
+fun View.visible() { visibility = View.VISIBLE }
+fun View.gone() { visibility = View.GONE }
+fun View.invisible() { visibility = View.INVISIBLE }
+
+fun Context.showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
+    Toast.makeText(this, message, duration).show()
+}
+
+fun View.showSnackbar(message: String, duration: Int = Snackbar.LENGTH_SHORT) {
+    Snackbar.make(this, message, duration).show()
+}
+
+fun View.showSnackbarWithAction(
+    message: String,
+    actionText: String,
+    duration: Int = Snackbar.LENGTH_LONG,
+    action: () -> Unit
+) {
+    Snackbar.make(this, message, duration)
+        .setAction(actionText) { action() }
+        .show()
+}
+
+fun <T> LiveData<T>.observeOnce(lifecycleOwner: LifecycleOwner, observer: (T) -> Unit) {
+    observe(lifecycleOwner, object : Observer<T> {
+        override fun onChanged(value: T) {
+            removeObserver(this)
+            observer(value)
+        }
+    })
+}
+
+fun Any.logDebug(message: String) = Timber.d("[${this::class.java.simpleName}] $message")
+fun Any.logError(message: String, throwable: Throwable? = null) = 
+    Timber.e(throwable, "[${this::class.java.simpleName}] $message")
+
+fun Long.toReadableDate(): String {
+    val sdf = java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault())
+    return sdf.format(java.util.Date(this))
+}
+
+fun Long?.isFuture(): Boolean {
+    return this != null && this > System.currentTimeMillis()
+}
+```
+
+---
+
+## 🔐 SECTION 8: ENCRYPTED PREFERENCES MANAGER
+
+### 8.1 Encrypted Preferences Manager (data/local/EncryptedPrefsManager.kt)
+
+```kotlin
+package com.ultra.autodetector.data.local
+
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import com.ultra.autodetector.util.Constants
+import timber.log.Timber
+
+class EncryptedPrefsManager private constructor(context: Context) {
+
+    private val masterKey: MasterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
+
+    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
+        context,
+        Constants.PREFS_FILE_NAME,
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
+
+    companion object {
+        @Volatile
+        private var instance: EncryptedPrefsManager? = null
+
+        fun getInstance(context: Context): EncryptedPrefsManager {
+            return instance ?: synchronized(this) {
+                instance ?: EncryptedPrefsManager(context.applicationContext).also {
+                    instance = it
+                }
+            }
+        }
+    }
+
+    fun isFirstLaunch(): Boolean {
+        return prefs.getBoolean(Constants.KEY_IS_FIRST_LAUNCH, true)
+    }
+
+    fun setFirstLaunchComplete() {
+        prefs.edit().putBoolean(Constants.KEY_IS_FIRST_LAUNCH, false).apply()
+    }
+
+    fun isAccessibilityGranted(): Boolean {
+        return prefs.getBoolean(Constants.KEY_ACCESSIBILITY_GRANTED, false)
+    }
+
+    fun setAccessibilityGranted(granted: Boolean) {
+        prefs.edit().putBoolean(Constants.KEY_ACCESSIBILITY_GRANTED, granted).apply()
+    }
+
+    fun isOverlayGranted(): Boolean {
+        return prefs.getBoolean(Constants.KEY_OVERLAY_GRANTED, false)
+    }
+
+    fun setOverlayGranted(granted: Boolean) {
+        prefs.edit().putBoolean(Constants.KEY_OVERLAY_GRANTED, granted).apply()
+    }
+
+    fun isMediaProjectionGranted(): Boolean {
+        return prefs.getBoolean(Constants.KEY_MEDIA_PROJECTION_GRANTED, false)
+    }
+
+    fun setMediaProjectionGranted(granted: Boolean) {
+        prefs.edit().putBoolean(Constants.KEY_MEDIA_PROJECTION_GRANTED, granted).apply()
+    }
+
+    fun saveMediaProjectionData(resultCode: Int, data: android.content.Intent) {
+        prefs.edit()
+            .putInt(Constants.KEY_MEDIA_PROJECTION_RESULT, resultCode)
+            .putString(Constants.KEY_MEDIA_PROJECTION_DATA, data.toUri(0))
+            .apply()
+    }
+
+    fun getMediaProjectionResultCode(): Int {
+        return prefs.getInt(Constants.KEY_MEDIA_PROJECTION_RESULT, -1)
+    }
+
+    fun getMediaProjectionData(): android.content.Intent? {
+        val uriString = prefs.getString(Constants.KEY_MEDIA_PROJECTION_DATA, null) ?: return null
+        return try {
+            android.content.Intent.parseUri(uriString, 0)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to parse MediaProjection intent")
+            null
+        }
+    }
+
+    fun clearAll() {
+        prefs.edit().clear().apply()
+    }
+}
+```
+
+---
+
+**END OF PART 4**

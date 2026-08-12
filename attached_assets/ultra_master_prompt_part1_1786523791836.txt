@@ -1,0 +1,644 @@
+# 🚀 ULTRA MASTER BLUEPRINT PROMPT - PART 1 OF 8
+## Android Auto-Clicker Application with OpenCV, Firebase & Telegram Integration
+
+---
+
+## 📋 EXECUTIVE SUMMARY
+
+Build a **production-ready Android application** in **Kotlin** that performs real-time screen detection using **OpenCV template matching**, **MediaProjection API** for screen capture, **AccessibilityService** for humanized auto-clicking, and **Firebase** (Auth, Firestore, Cloud Storage) for user management, license control, and template distribution. Includes a **Telegram integration** for account renewal requests with pre-filled admin contact and user data.
+
+**Target API Level:** 33+ (Android 13+)  
+**Minimum API Level:** 26 (Android 8.0)  
+**Language:** Kotlin  
+**Architecture:** MVVM + Service-Oriented  
+
+---
+
+## 🔐 CRITICAL SECRETS & CONFIGURATION
+
+```properties
+# Firebase Project Configuration (REPLACE WITH YOUR OWN)
+# Google Services JSON: app/google-services.json
+
+# Admin Credentials (HARDCODED SUPER-USER)
+ADMIN_EMAIL = "diwanatik84@gmail.com"
+ADMIN_PASSWORD = "1qwwq11qw"
+
+# Telegram Admin Contact
+TELEGRAM_ADMIN_USERNAME = "@dminofclicker"
+TELEGRAM_ADMIN_LINK = "https://t.me/dminofclicker"
+
+# OpenCV Template Matching Threshold
+CONFIDENCE_THRESHOLD = 0.85
+
+# Humanization Parameters
+MICRO_DELAY_MIN_MS = 1
+MICRO_DELAY_MAX_MS = 100
+JITTER_RANGE_PX = 2
+COOLDOWN_INTERVAL_MS = 300
+
+# License Time Constants
+ONE_DAY_MS = 86400000
+TWO_DAYS_MS = 172800000
+THREE_DAYS_MS = 259200000
+LIFETIME_MS = 4102444800000  # January 1, 2100
+```
+
+---
+
+## 📁 COMPLETE FILE STRUCTURE
+
+```
+app/
+├── src/main/
+│   ├── java/com/ultra/autodetector/
+│   │   ├── data/
+│   │   │   ├── firebase/
+│   │   │   │   ├── FirebaseAuthManager.kt
+│   │   │   │   ├── FirestoreManager.kt
+│   │   │   │   └── StorageManager.kt
+│   │   │   ├── local/
+│   │   │   │   ├── EncryptedPrefsManager.kt
+│   │   │   │   └── PermissionCacheManager.kt
+│   │   │   └── model/
+│   │   │       ├── User.kt
+│   │   │       ├── Template.kt
+│   │   │       └── LicenseStatus.kt
+│   │   ├── service/
+│   │   │   ├── DetectionService.kt
+│   │   │   ├── AutoClickService.kt
+│   │   │   └── FloatingWidgetService.kt
+│   │   ├── opencv/
+│   │   │   ├── OpenCvManager.kt
+│   │   │   ├── ScreenCaptureManager.kt
+│   │   │   └── TemplateMatcher.kt
+│   │   ├── ui/
+│   │   │   ├── auth/
+│   │   │   │   └── AuthActivity.kt
+│   │   │   ├── main/
+│   │   │   │   └── MainActivity.kt
+│   │   │   ├── admin/
+│   │   │   │   └── AdminActivity.kt
+│   │   │   └── adapter/
+│   │   │       ├── UserAdapter.kt
+│   │   │       └── TemplateAdapter.kt
+│   │   ├── util/
+│   │   │   ├── Constants.kt
+│   │   │   ├── TelegramHelper.kt
+│   │   │   ├── HumanizationEngine.kt
+│   │   │   └── Extensions.kt
+│   │   └── UltraAutoDetectorApp.kt
+│   ├── res/
+│   │   ├── layout/
+│   │   │   ├── activity_auth.xml
+│   │   │   ├── activity_main.xml
+│   │   │   ├── activity_admin.xml
+│   │   │   ├── item_user_row.xml
+│   │   │   ├── item_template_row.xml
+│   │   │   ├── floating_widget_layout.xml
+│   │   │   └── dialog_renew_account.xml
+│   │   ├── drawable/
+│   │   │   ├── bg_gradient_header.xml
+│   │   │   ├── bg_status_pending.xml
+│   │   │   ├── bg_status_approved.xml
+│   │   │   ├── bg_status_rejected.xml
+│   │   │   ├── bg_status_expired.xml
+│   │   │   ├── bg_button_primary.xml
+│   │   │   ├── bg_button_secondary.xml
+│   │   │   ├── bg_button_danger.xml
+│   │   │   ├── bg_button_success.xml
+│   │   │   ├── bg_floating_widget.xml
+│   │   │   ├── ic_logo.xml
+│   │   │   ├── ic_play.xml
+│   │   │   ├── ic_pause.xml
+│   │   │   ├── ic_close.xml
+│   │   │   ├── ic_telegram.xml
+│   │   │   ├── ic_admin_panel.xml
+│   │   │   ├── ic_time_1d.xml
+│   │   │   ├── ic_time_2d.xml
+│   │   │   ├── ic_time_3d.xml
+│   │   │   ├── ic_lifetime.xml
+│   │   │   └── ic_reject.xml
+│   │   ├── values/
+│   │   │   ├── colors.xml
+│   │   │   ├── strings.xml
+│   │   │   ├── themes.xml
+│   │   │   ├── dimens.xml
+│   │   │   └── styles.xml
+│   │   ├── xml/
+│   │   │   ├── accessibility_service_config.xml
+│   │   │   └── file_paths.xml
+│   │   └── menu/
+│   │       └── menu_admin.xml
+│   └── AndroidManifest.xml
+├── build.gradle.kts (Module: app)
+└── build.gradle.kts (Project)
+
+firebase/
+└── firestore.rules
+```
+
+---
+
+## 🔥 SECTION 1: FIREBASE CONFIGURATION & SECURITY RULES
+
+### 1.1 Firestore Security Rules (firebase/firestore.rules)
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // USER ACCOUNTS COLLECTION
+    // ============================================================
+    match /users/{userId} {
+      // READ: User can read own document OR admin can read all
+      allow read: if request.auth != null 
+        && (request.auth.uid == userId 
+            || request.auth.token.email == 'diwanatik84@gmail.com');
+
+      // CREATE: Any authenticated user can create their own document
+      allow create: if request.auth != null 
+        && request.auth.uid == userId
+        && request.resource.data.role == 'user'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.expirationTimestamp == null;
+
+      // WRITE: ONLY admin can update any user document
+      allow write: if request.auth != null 
+        && request.auth.token.email == 'diwanatik84@gmail.com';
+    }
+
+    // ============================================================
+    // DETECTION TEMPLATES COLLECTION
+    // ============================================================
+    match /templates/{templateId} {
+      // READ: Any authenticated user can read templates
+      allow read: if request.auth != null;
+
+      // WRITE: ONLY admin can create/update/delete templates
+      allow write: if request.auth != null 
+        && request.auth.token.email == 'diwanatik84@gmail.com';
+    }
+
+    // ============================================================
+    // ADMIN LOGS COLLECTION (Audit Trail)
+    // ============================================================
+    match /adminLogs/{logId} {
+      allow read: if request.auth != null 
+        && request.auth.token.email == 'diwanatik84@gmail.com';
+      allow create: if request.auth != null 
+        && request.auth.token.email == 'diwanatik84@gmail.com';
+      allow update, delete: if false; // Immutable logs
+    }
+  }
+}
+```
+
+### 1.2 Firebase Storage Rules
+
+```javascript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Templates folder - admin write, all authenticated read
+    match /templates/{templateId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null 
+        && request.auth.token.email == 'diwanatik84@gmail.com';
+    }
+
+    // User profile images
+    match /profiles/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null 
+        && request.auth.uid == userId;
+    }
+  }
+}
+```
+
+---
+
+## 📱 SECTION 2: DATA MODELS
+
+### 2.1 User Data Model (data/model/User.kt)
+
+```kotlin
+package com.ultra.autodetector.data.model
+
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.PropertyName
+
+/**
+ * Represents a user account in the Firestore database.
+ * 
+ * @property uid Firebase Authentication UID
+ * @property email User's registered email address
+ * @property role User role: "user" or "admin"
+ * @property status Account status: "pending", "approved", "rejected", "expired"
+ * @property expirationTimestamp License expiration time in milliseconds (null = never approved)
+ * @property createdAt Account creation timestamp (server-side)
+ * @property lastLoginAt Last successful login timestamp
+ * @property deviceInfo Device model and Android version for tracking
+ */
+data class User(
+    @PropertyName("uid") val uid: String = "",
+    @PropertyName("email") val email: String = "",
+    @PropertyName("role") val role: String = "user",
+    @PropertyName("status") val status: String = "pending",
+    @PropertyName("expirationTimestamp") val expirationTimestamp: Long? = null,
+    @PropertyName("createdAt") val createdAt: Timestamp? = null,
+    @PropertyName("lastLoginAt") val lastLoginAt: Timestamp? = null,
+    @PropertyName("deviceInfo") val deviceInfo: String = ""
+) {
+    /**
+     * Checks if the user's license is currently active.
+     * Returns true if status is "approved" AND expiration is in the future.
+     */
+    fun isLicenseActive(): Boolean {
+        if (status != "approved") return false
+        val exp = expirationTimestamp ?: return false
+        return System.currentTimeMillis() < exp
+    }
+
+    /**
+     * Calculates remaining time in human-readable format.
+     */
+    fun getRemainingTimeText(): String {
+        if (status == "lifetime" || expirationTimestamp == 4102444800000L) 
+            return "Lifetime"
+        val exp = expirationTimestamp ?: return "Not Approved"
+        val diff = exp - System.currentTimeMillis()
+        if (diff <= 0) return "Expired"
+        val days = diff / (1000 * 60 * 60 * 24)
+        val hours = (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+        return "${days}d ${hours}h remaining"
+    }
+}
+```
+
+### 2.2 Template Data Model (data/model/Template.kt)
+
+```kotlin
+package com.ultra.autodetector.data.model
+
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.PropertyName
+
+/**
+ * Represents a detection template stored in Firestore and Firebase Storage.
+ * 
+ * @property templateId Unique template identifier (Firestore document ID)
+ * @property name Human-readable template name
+ * @property description Optional description of what this template detects
+ * @property storagePath Firebase Storage path: "templates/{templateId}.png"
+ * @property downloadUrl Public download URL for the template image
+ * @property confidenceThreshold Override confidence threshold (default: 0.85)
+ * @property isActive Whether this template is currently active for detection
+ * @property createdAt Template creation timestamp
+ * @property createdBy Admin UID who created this template
+ */
+data class Template(
+    @PropertyName("templateId") val templateId: String = "",
+    @PropertyName("name") val name: String = "",
+    @PropertyName("description") val description: String = "",
+    @PropertyName("storagePath") val storagePath: String = "",
+    @PropertyName("downloadUrl") val downloadUrl: String = "",
+    @PropertyName("confidenceThreshold") val confidenceThreshold: Double = 0.85,
+    @PropertyName("isActive") val isActive: Boolean = true,
+    @PropertyName("createdAt") val createdAt: Timestamp? = null,
+    @PropertyName("createdBy") val createdBy: String = ""
+)
+```
+
+### 2.3 License Status Enum (data/model/LicenseStatus.kt)
+
+```kotlin
+package com.ultra.autodetector.data.model
+
+import androidx.annotation.ColorRes
+import androidx.annotation.DrawableRes
+import com.ultra.autodetector.R
+
+/**
+ * Enum representing all possible account license statuses.
+ */
+enum class LicenseStatus(
+    val displayName: String,
+    @ColorRes val colorRes: Int,
+    @DrawableRes val backgroundDrawable: Int,
+    val canUseApp: Boolean
+) {
+    PENDING(
+        displayName = "Pending Approval",
+        colorRes = R.color.status_pending,
+        backgroundDrawable = R.drawable.bg_status_pending,
+        canUseApp = false
+    ),
+    APPROVED(
+        displayName = "Active",
+        colorRes = R.color.status_approved,
+        backgroundDrawable = R.drawable.bg_status_approved,
+        canUseApp = true
+    ),
+    REJECTED(
+        displayName = "Rejected",
+        colorRes = R.color.status_rejected,
+        backgroundDrawable = R.drawable.bg_status_rejected,
+        canUseApp = false
+    ),
+    EXPIRED(
+        displayName = "Expired",
+        colorRes = R.color.status_expired,
+        backgroundDrawable = R.drawable.bg_status_expired,
+        canUseApp = false
+    ),
+    ADMIN(
+        displayName = "Admin",
+        colorRes = R.color.status_admin,
+        backgroundDrawable = R.drawable.bg_status_approved,
+        canUseApp = true
+    )
+}
+```
+
+---
+
+## 🎨 SECTION 3: UI LAYOUT FILES (XML)
+
+### 3.1 Authentication Screen (res/layout/activity_auth.xml)
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_dark"
+    tools:context=".ui.auth.AuthActivity">
+
+    <!-- ScrollView for small screens -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="24dp">
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- HEADER SECTION: Logo + App Title -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <ImageView
+                android:id="@+id/ivLogo"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:src="@drawable/ic_logo"
+                android:contentDescription="@string/app_logo"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:layout_marginTop="48dp" />
+
+            <TextView
+                android:id="@+id/tvAppTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Ultra AutoDetector"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:textColor="@color/primary_accent"
+                android:fontFamily="sans-serif-black"
+                app:layout_constraintTop_toBottomOf="@id/ivLogo"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:id="@+id/tvAppSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AI-Powered Screen Detection & Auto-Click"
+                android:textSize="14sp"
+                android:textColor="@color/text_secondary"
+                app:layout_constraintTop_toBottomOf="@id/tvAppTitle"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:layout_marginTop="4dp" />
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- ACCOUNT STATUS CARD (Visible after login attempt) -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cardStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:visibility="gone"
+                app:cardCornerRadius="16dp"
+                app:cardBackgroundColor="@color/card_background"
+                app:cardElevation="8dp"
+                app:layout_constraintTop_toBottomOf="@id/tvAppSubtitle">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Account Status"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.1" />
+
+                    <TextView
+                        android:id="@+id/tvStatusLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Pending Approval"
+                        android:textSize="22sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/status_pending"
+                        android:layout_marginTop="8dp" />
+
+                    <TextView
+                        android:id="@+id/tvStatusMessage"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Your account is awaiting admin approval."
+                        android:textSize="14sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginTop="4dp" />
+
+                    <TextView
+                        android:id="@+id/tvExpirationTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Expires: Not Set"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_hint"
+                        android:layout_marginTop="8dp" />
+
+                    <!-- ═══════════════════════════════════════════════ -->
+                    <!-- TELEGRAM RENEWAL BUTTON (NEW FEATURE) -->
+                    <!-- ═══════════════════════════════════════════════ -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnContactAdminTelegram"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="16dp"
+                        android:text="Renew Account via Telegram"
+                        android:textSize="15sp"
+                        android:textAllCaps="false"
+                        android:textColor="@color/white"
+                        app:icon="@drawable/ic_telegram"
+                        app:iconGravity="textStart"
+                        app:iconPadding="12dp"
+                        app:iconTint="@color/white"
+                        app:backgroundTint="@color/telegram_blue"
+                        app:cornerRadius="12dp"
+                        app:rippleColor="@color/telegram_blue_dark" />
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- AUTHENTICATION FORM -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cardAuthForm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                app:cardCornerRadius="16dp"
+                app:cardBackgroundColor="@color/card_background"
+                app:cardElevation="4dp"
+                app:layout_constraintTop_toBottomOf="@id/cardStatus">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="24dp">
+
+                    <!-- Email Input Field -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilEmail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Email Address"
+                        app:hintTextColor="@color/text_hint"
+                        app:boxStrokeColor="@color/primary_accent"
+                        app:boxCornerRadiusTopStart="12dp"
+                        app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp"
+                        app:boxCornerRadiusBottomEnd="12dp"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etEmail"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textEmailAddress"
+                            android:textColor="@color/text_primary"
+                            android:textSize="16sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <!-- Password Input Field -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilPassword"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:hint="Password"
+                        app:hintTextColor="@color/text_hint"
+                        app:boxStrokeColor="@color/primary_accent"
+                        app:passwordToggleEnabled="true"
+                        app:passwordToggleTint="@color/text_secondary"
+                        app:boxCornerRadiusTopStart="12dp"
+                        app:boxCornerRadiusTopEnd="12dp"
+                        app:boxCornerRadiusBottomStart="12dp"
+                        app:boxCornerRadiusBottomEnd="12dp"
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etPassword"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textPassword"
+                            android:textColor="@color/text_primary"
+                            android:textSize="16sp" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <!-- Login Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLogin"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="24dp"
+                        android:text="Login"
+                        android:textSize="16sp"
+                        android:textAllCaps="false"
+                        android:textColor="@color/white"
+                        app:backgroundTint="@color/primary_accent"
+                        app:cornerRadius="12dp" />
+
+                    <!-- Register Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRegister"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="12dp"
+                        android:text="Create Account"
+                        android:textSize="16sp"
+                        android:textAllCaps="false"
+                        android:textColor="@color/primary_accent"
+                        app:backgroundTint="@android:color/transparent"
+                        app:strokeColor="@color/primary_accent"
+                        app:strokeWidth="2dp"
+                        app:cornerRadius="12dp" />
+
+                    <!-- Progress Bar (Hidden by default) -->
+                    <ProgressBar
+                        android:id="@+id/progressBar"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_marginTop="16dp"
+                        android:visibility="gone"
+                        android:indeterminateTint="@color/primary_accent" />
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Version Label -->
+            <TextView
+                android:id="@+id/tvVersion"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="v1.0.0"
+                android:textSize="12sp"
+                android:textColor="@color/text_hint"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:layout_marginBottom="16dp" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </ScrollView>
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+---
+
+**END OF PART 1**

@@ -11,7 +11,7 @@ import kotlin.random.Random
 object HumanizationEngine {
     @Volatile private var lastClickAt = 0L
 
-    fun getMicroDelay(): Long = Random.nextLong(20L, 90L)
+    fun getMicroDelay(): Long = Random.nextLong(1L, 101L)
 
     fun applyJitter(targetX: Float, targetY: Float): Pair<Float, Float> {
         val range = Constants.JITTER_RANGE_PX

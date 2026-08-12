@@ -1,8 +1,8 @@
 package com.ultra.autodetector.service
 
 import android.app.Service
-import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
@@ -11,18 +11,18 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat
-import android.content.pm.ServiceInfo
-import com.ultra.autodetector.UltraAutoDetectorApp
-import com.ultra.autodetector.R
+import com.ultra.autodetector.util.Constants
 
 class FloatingWidgetService : Service() {
     private lateinit var windowManager: WindowManager
-    private var root: View? = null
+    private var bubble: TextView? = null
+    private var root: FrameLayout? = null
     private var params: WindowManager.LayoutParams? = null
+    private var expanded = false
+    private var moved = false
     private var downX = 0f
     private var downY = 0f
     private var startX = 0
@@ -37,81 +37,34 @@ class FloatingWidgetService : Service() {
         if (intent?.action == ACTION_HIDE) {
             removeWidget()
             stopSelf()
-        } else if (root == null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ServiceCompat.startForeground(
-                    this,
-                    NOTIFICATION_ID,
-                    NotificationCompat.Builder(this, UltraAutoDetectorApp.CHANNEL_ID)
-                        .setSmallIcon(android.R.drawable.ic_menu_view)
-                        .setContentTitle(getString(R.string.detection_notification_title))
-                        .setContentText("Floating controls are available while detection is active.")
-                        .setOngoing(true)
-                        .build(),
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-                )
-            } else {
-                startForeground(
-                    NOTIFICATION_ID,
-                    NotificationCompat.Builder(this, UltraAutoDetectorApp.CHANNEL_ID)
-                        .setSmallIcon(android.R.drawable.ic_menu_view)
-                        .setContentTitle(getString(R.string.detection_notification_title))
-                        .setContentText("Floating controls are available while detection is active.")
-                        .setOngoing(true)
-                        .build(),
-                )
-            }
+        } else if (root == null && canDrawOverlays()) {
             createWidget()
         }
         return START_NOT_STICKY
     }
 
     private fun createWidget() {
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(12, 8, 12, 8)
-            setBackgroundColor(0xEE102532.toInt())
+        val frame = FrameLayout(this)
+        val marker = TextView(this).apply {
+            text = "U"
+            textSize = 20f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(8, 18, 27))
+            setBackgroundColor(Color.rgb(86, 214, 200))
+            contentDescription = "Ultra AutoDetector controls"
+            setOnClickListener { if (!moved) toggleMenu() }
         }
-        val status = TextView(this).apply {
-            text = "  DETECTOR  "
-            setTextColor(0xFF56D6C8.toInt())
-            contentDescription = "Detection status"
-        }
-        val pause = Button(this).apply {
-            text = "Pause"
-            contentDescription = "Pause detection"
-            var isPaused = false
-            setOnClickListener {
-                isPaused = !isPaused
-                sendBroadcast(
-                    Intent(DetectionService.ACTION_PAUSE)
-                        .setPackage(packageName)
-                        .putExtra(DetectionService.EXTRA_PAUSED, isPaused),
-                )
-                text = if (isPaused) "Resume" else "Pause"
-                contentDescription = if (isPaused) "Resume detection" else "Pause detection"
-            }
-        }
-        val stop = Button(this).apply {
-            text = "Stop"
-            contentDescription = "Stop detection"
-            setOnClickListener {
-                sendBroadcast(Intent(DetectionService.ACTION_STOP).setPackage(packageName))
-                removeWidget()
-                stopSelf()
-            }
-        }
-        container.addView(status)
-        container.addView(pause)
-        container.addView(stop)
-        root = container
+        val size = (56 * resources.displayMetrics.density).toInt()
+        frame.addView(marker, FrameLayout.LayoutParams(size, size))
+        bubble = marker
+        root = frame
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         } else WindowManager.LayoutParams.TYPE_PHONE
         params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            size,
+            size,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
@@ -120,44 +73,104 @@ class FloatingWidgetService : Service() {
             x = 16
             y = 180
         }
-        container.setOnTouchListener { _, event ->
-            val currentParams = params ?: return@setOnTouchListener false
-            when (event.action) {
+        marker.setOnTouchListener { view, event ->
+            val current = params ?: return@setOnTouchListener false
+            when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    startX = currentParams.x
-                    startY = currentParams.y
+                    moved = false
                     downX = event.rawX
                     downY = event.rawY
-                    true
+                    startX = current.x
+                    startY = current.y
+                    false
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    currentParams.x = startX + (event.rawX - downX).toInt()
-                    currentParams.y = startY + (event.rawY - downY).toInt()
-                    windowManager.updateViewLayout(container, currentParams)
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    if (kotlin.math.abs(dx) > 6 || kotlin.math.abs(dy) > 6) moved = true
+                    current.x = startX + dx.toInt()
+                    current.y = startY + dy.toInt()
+                    windowManager.updateViewLayout(frame, current)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (moved) snapToEdge(frame, current, size)
+                    else view.performClick()
                     true
                 }
                 else -> true
             }
         }
-        windowManager.addView(container, params)
+        windowManager.addView(frame, params)
     }
 
+    private fun toggleMenu() {
+        val frame = root ?: return
+        if (expanded) {
+            if (frame.childCount > 1) frame.removeViewAt(1)
+            expanded = false
+            return
+        }
+        val menu = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.rgb(16, 37, 50))
+            setPadding(6, 2, 6, 2)
+        }
+        val play = Button(this).apply {
+            text = "Play"
+            setOnClickListener {
+                sendBroadcast(Intent(Constants.ACTION_START_DETECTION).setPackage(packageName))
+                toggleMenu()
+            }
+        }
+        val pause = Button(this).apply {
+            text = if (DetectionService.isPaused) "Resume" else "Pause"
+            setOnClickListener {
+                sendBroadcast(
+                    Intent(DetectionService.ACTION_PAUSE).setPackage(packageName)
+                        .putExtra(DetectionService.EXTRA_PAUSED, !DetectionService.isPaused),
+                )
+                text = if (DetectionService.isPaused) "Resume" else "Pause"
+            }
+        }
+        val close = Button(this).apply {
+            text = "Close"
+            setOnClickListener {
+                sendBroadcast(Intent(DetectionService.ACTION_STOP).setPackage(packageName))
+                removeWidget()
+                stopSelf()
+            }
+        }
+        menu.addView(play)
+        menu.addView(pause)
+        menu.addView(close)
+        frame.addView(menu)
+        expanded = true
+    }
+
+    private fun snapToEdge(frame: View, current: WindowManager.LayoutParams, size: Int) {
+        val width = resources.displayMetrics.widthPixels
+        current.x = if (current.x + size / 2 < width / 2) 8 else width - size - 8
+        windowManager.updateViewLayout(frame, current)
+    }
+
+    private fun canDrawOverlays(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.M || android.provider.Settings.canDrawOverlays(this)
+
     private fun removeWidget() {
-        root?.let { view -> runCatching { windowManager.removeView(view) } }
+        root?.let { runCatching { windowManager.removeView(it) } }
         root = null
+        bubble = null
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         removeWidget()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE)
-        else @Suppress("DEPRECATION") stopForeground(true)
         super.onDestroy()
     }
 
     companion object {
-        const val ACTION_HIDE = "com.ultra.autodetector.action.HIDE_WIDGET"
-        private const val NOTIFICATION_ID = 102
+        const val ACTION_HIDE = Constants.ACTION_HIDE_FLOATING_WIDGET
     }
 }

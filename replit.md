@@ -1,22 +1,21 @@
 # Ultra AutoDetector
 
-Native Android app for user-controlled screen capture, template detection, licensed access, and explicit gesture controls.
+Native Kotlin Android app for offline user-controlled screen capture, local
+template detection, license handling, and explicit gesture controls.
 
 ## Run & Operate
 
 ### Android app
 
 - Open `android-app/` in Android Studio with Android SDK platform 35.
-- The default app mode uses a private on-device SQLite database and does not require Firebase.
-- `FirebaseRepository` and `google-services.json` remain optional for a future cloud-backed build.
-- Build with `./gradlew assembleDebug` from `android-app/`.
+- The default app uses a private on-device Room/SQLite database and has no Firebase or cloud dependency.
+- Build with `gradle assembleDebug` from `android-app/` on a machine with Android SDK platform 35.
 - Replit can validate Gradle configuration, but this container does not include the Android SDK, so APK compilation must run on an Android development machine.
 
 The app currently uses local database mode:
 
-- Regular account: any valid email and password with at least eight characters creates a local active demo account when logging in; registration creates a pending account.
-- Admin demo account: `admin@local.demo` / `UltraAdmin!26`.
-- Accounts, licenses, templates, permission state, and session state are stored in the device-local SQLite database.
+- Regular accounts are created as pending and require admin approval.
+- Accounts, licenses, templates, and session state are stored in the device-local Room database.
 - Local mode is not production authentication and does not synchronize between devices.
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
@@ -51,8 +50,8 @@ The app currently uses local database mode:
 
 ## Architecture decisions
 
-- Firebase admin authorization is represented by trusted token claims in rules; the client never contains an administrator password.
-- Local database mode keeps the UI usable without cloud credentials and persists separate demo identities on the device.
+- Administrator authorization is local-development-only; the app never embeds the exposed prompt password.
+- Local database mode keeps the UI usable without cloud credentials.
 - Screen capture and overlay services start only after explicit user actions and permissions.
 - MediaProjection authorization is held in memory for the current session instead of being serialized as a reusable token.
 - License renewals extend from the later of the current expiration and now; admin actions are written to an immutable audit collection.
@@ -68,7 +67,7 @@ Users can sign in or create a pending account, review license status, grant devi
 ## Gotchas
 
 - A Firebase Android configuration is optional for local database mode but required only for the optional cloud adapter.
-- Before release, deploy and test both Firebase rules files with authenticated, unauthenticated, regular-user, and admin cases.
+- Before release, replace local admin provisioning with a trusted server-side or managed provisioning path.
 - Android SDK platform 35 is required to compile the app; Replit's current container does not provide it.
 
 ## Pointers

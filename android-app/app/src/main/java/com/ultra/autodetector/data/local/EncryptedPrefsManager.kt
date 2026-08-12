@@ -26,6 +26,9 @@ class EncryptedPrefsManager(context: Context) {
         context.getSharedPreferences(Constants.PREFS_FILE_NAME, Context.MODE_PRIVATE)
     }
 
+    fun getSessionUid(): String? = prefs.getString(Constants.KEY_SESSION_UID, null)
+    fun setSessionUid(uid: String?) = prefs.edit().putString(Constants.KEY_SESSION_UID, uid).apply()
+
     fun isAccessibilityGranted() = prefs.getBoolean(Constants.KEY_ACCESSIBILITY_GRANTED, false)
     fun setAccessibilityGranted(value: Boolean) =
         prefs.edit().putBoolean(Constants.KEY_ACCESSIBILITY_GRANTED, value).apply()

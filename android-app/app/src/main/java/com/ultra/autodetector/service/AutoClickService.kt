@@ -2,57 +2,57 @@ package com.ultra.autodetector.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.random.Random
+import com.ultra.autodetector.util.Constants
+import com.ultra.autodetector.util.HumanizationEngine
 
-/**
- * Receives only explicit click requests from the detection pipeline. This
- * service intentionally has no target-app discovery or anti-bot behavior.
- */
 class AutoClickService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
-    private var clickPending = false
 
     override fun onServiceConnected() {
         instance = this
+        val filter = IntentFilter(Constants.ACTION_PERFORM_CLICK)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(clickReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(clickReceiver, filter)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
-
     override fun onInterrupt() = Unit
 
     fun performUserRequestedClick(x: Float, y: Float) {
-        if (clickPending) return
-        clickPending = true
-        val safeX = max(0f, x)
-        val safeY = max(0f, y)
-        val delayMs = Random.nextLong(20L, 90L)
+        val delay = HumanizationEngine.getMicroDelay()
         handler.postDelayed({
-            val path = Path().apply { moveTo(safeX, safeY) }
-            val gesture = GestureDescription.Builder()
-                .addStroke(GestureDescription.StrokeDescription(path, 0L, min(160L, 70L + delayMs)))
-                .build()
-            val accepted = dispatchGesture(gesture, object : GestureResultCallback() {
-                override fun onCompleted(gestureDescription: GestureDescription?) {
-                    clickPending = false
-                }
+            val (jx, jy) = HumanizationEngine.applyJitter(x, y)
+            val path = Path().apply { moveTo(jx, jy) }
+            val stroke = GestureDescription.StrokeDescription(path, 0L, 100L)
+            dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, handler)
+        }, delay)
+    }
 
-                override fun onCancelled(gestureDescription: GestureDescription?) {
-                    clickPending = false
-                }
-            }, handler)
-            if (!accepted) clickPending = false
-        }, delayMs)
+    private val clickReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Constants.ACTION_PERFORM_CLICK) {
+                performUserRequestedClick(
+                    intent.getFloatExtra(Constants.EXTRA_CLICK_X, 0f),
+                    intent.getFloatExtra(Constants.EXTRA_CLICK_Y, 0f),
+                )
+            }
+        }
     }
 
     override fun onDestroy() {
-        handler.removeCallbacksAndMessages(null)
-        clickPending = false
+        runCatching { unregisterReceiver(clickReceiver) }
         if (instance === this) instance = null
         super.onDestroy()
     }

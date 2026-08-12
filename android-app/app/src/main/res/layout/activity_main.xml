@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ink">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Control center"
+                android:textColor="@android:color/white"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+            <ImageButton
+                android:id="@+id/btn_logout"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="Logout"
+                android:src="@android:drawable/ic_lock_power_off" />
+        </LinearLayout>
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            app:cardBackgroundColor="@color/surface_blue">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SUBSCRIPTION"
+                    android:textColor="@color/muted"
+                    android:textSize="12sp" />
+                <TextView
+                    android:id="@+id/subscription_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/teal"
+                    android:textSize="21sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/subscription_details"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:textColor="@android:color/white" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_renew"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Renew via Telegram" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="PERMISSIONS"
+            android:textColor="@color/teal"
+            android:textStyle="bold" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical"
+            android:background="@color/surface_blue"
+            android:padding="14dp">
+            <LinearLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center_vertical" android:paddingVertical="6dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="Accessibility service"
+                    android:textColor="@android:color/white" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/btn_accessibility"
+                    style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="Grant" />
+                <TextView android:id="@+id/accessibility_status" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:textColor="@color/teal" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center_vertical" android:paddingVertical="6dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="Draw over other apps"
+                    android:textColor="@android:color/white" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/btn_overlay"
+                    style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="Grant" />
+                <TextView android:id="@+id/overlay_status" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:textColor="@color/teal" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center_vertical" android:paddingVertical="6dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:text="Screen recording consent"
+                    android:textColor="@android:color/white" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/btn_screen_capture"
+                    style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:text="Grant" />
+                <TextView android:id="@+id/capture_status" android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" android:textColor="@color/teal" />
+            </LinearLayout>
+        </LinearLayout>
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            app:cardBackgroundColor="@color/surface_blue">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+                <TextView
+                    android:id="@+id/detector_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/white"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/detector_error"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Account expired or permissions are missing. Renew via Telegram."
+                    android:textColor="@color/warning"
+                    android:visibility="gone" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_start_stop"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="START DETECTION" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_pause"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="PAUSE"
+                        android:visibility="gone" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_admin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="ADMIN CONTROL PANEL"
+            android:visibility="gone" />
+    </LinearLayout>
+</ScrollView>

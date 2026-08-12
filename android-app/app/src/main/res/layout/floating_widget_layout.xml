@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:padding="8dp"
+    android:background="@color/surface_blue">
+    <TextView android:id="@+id/widget_title" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:text="DETECTOR"
+        android:textColor="@color/teal" android:gravity="center_vertical" />
+    <Button android:id="@+id/widget_pause" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:text="Pause" />
+    <Button android:id="@+id/widget_close" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:text="Close" />
+</LinearLayout>
