@@ -14,23 +14,18 @@ import com.ultra.autodetector.auth.AuthRepository
 import com.ultra.autodetector.ui.main.MainActivity
 
 class AuthActivity : AppCompatActivity() {
-
     private lateinit var authRepo: AuthRepository
     private var isLoginMode = true
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_auth)
-
         authRepo = AuthRepository(this)
-
         val prefs = getSharedPreferences("auth", MODE_PRIVATE)
         if (prefs.contains("email")) {
             startActivity(Intent(this, MainActivity::class.java))
             finish()
             return
         }
-
         val tabs = findViewById<TabLayout>(R.id.auth_tabs)
         val inputEmail = findViewById<TextInputEditText>(R.id.input_email)
         val inputPassword = findViewById<TextInputEditText>(R.id.input_password)
@@ -38,8 +33,6 @@ class AuthActivity : AppCompatActivity() {
         val btnRegister = findViewById<MaterialButton>(R.id.btn_register)
         val btnTrial = findViewById<MaterialButton>(R.id.btn_trial)
         val statusCard = findViewById<MaterialCardView>(R.id.status_card)
-        val statusTitle = findViewById<TextView>(R.id.status_title)
-        val statusDetails = findViewById<TextView>(R.id.status_details)
         val btnRenew = findViewById<MaterialButton>(R.id.btn_renew)
 
         tabs.addTab(tabs.newTab().setText("LOGIN"))
@@ -68,19 +61,16 @@ class AuthActivity : AppCompatActivity() {
                 startActivity(Intent(this, MainActivity::class.java))
                 finish()
             } else {
-                inputEmail.error = "Enter valid email & pass > 4"
+                inputEmail.error = "Enter valid email"
             }
         }
-
         btnLogin.setOnClickListener { doAuth() }
         btnRegister.setOnClickListener { doAuth() }
-
         btnTrial.setOnClickListener {
             authRepo.login("diwanatik84@gmail.com", "admin123")
             startActivity(Intent(this, MainActivity::class.java))
             finish()
         }
-
         btnRenew.setOnClickListener {
             statusCard.visibility = View.GONE
         }
