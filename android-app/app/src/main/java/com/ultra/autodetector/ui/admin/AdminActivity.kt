@@ -1,6 +1,7 @@
 package com.ultra.autodetector.ui.admin
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
@@ -18,9 +19,11 @@ import com.ultra.autodetector.data.local.UserEntity
 import com.ultra.autodetector.data.model.User
 import com.ultra.autodetector.data.repository.AdminConfig
 import com.ultra.autodetector.data.repository.AuthRepository
+import com.ultra.autodetector.data.repository.TemplateRepository
 import com.ultra.autodetector.data.repository.UserRepository
 import com.ultra.autodetector.databinding.ActivityAdminBinding
 import com.ultra.autodetector.ui.adapter.UserAdapter
+import com.ultra.autodetector.ui.adapter.TemplateAdapter
 import com.github.mikephil.charting.data.BarData
 import com.github.mikephil.charting.data.BarDataSet
 import com.github.mikephil.charting.data.BarEntry
@@ -32,9 +35,12 @@ class AdminActivity : AppCompatActivity() {
     private lateinit var binding: ActivityAdminBinding
     private lateinit var auth: AuthRepository
     private lateinit var users: UserRepository
+    private lateinit var templates: TemplateRepository
     private var admin: User? = null
     private var selectedFilter = "all"
     private var pendingExport: String? = null
+
+    private val templateAdapter = TemplateAdapter(onDelete = ::confirmDeleteTemplate)
 
     private val userAdapter = UserAdapter(
         onGrant = { user, days -> approve(user, days) },
@@ -53,6 +59,18 @@ class AdminActivity : AppCompatActivity() {
             }
         }
 
+    private val chooseTemplate =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri ?: return@registerForActivityResult
+            runCatching {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            showTemplateDetailsDialog(uri)
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -60,8 +78,11 @@ class AdminActivity : AppCompatActivity() {
         setContentView(binding.root)
         auth = AuthRepository(this)
         users = UserRepository(this)
+        templates = TemplateRepository(this)
         binding.usersList.layoutManager = LinearLayoutManager(this)
         binding.usersList.adapter = userAdapter
+        binding.templatesList.layoutManager = LinearLayoutManager(this)
+        binding.templatesList.adapter = templateAdapter
         binding.btnBack.setOnClickListener { finish() }
         setupTabs()
         setupActions()
@@ -110,13 +131,19 @@ class AdminActivity : AppCompatActivity() {
     }
 
     private fun setupTabs() {
-        listOf("Dashboard", "Users", "Broadcast", "Settings").forEach {
+        listOf("Dashboard", "Users", "Templates", "Broadcast", "Settings").forEach {
             binding.adminTabs.addTab(binding.adminTabs.newTab().setText(it))
         }
         binding.adminTabs.addOnTabSelectedListener(object :
             com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) {
-                val pages = listOf(binding.pageDashboard, binding.pageUsers, binding.pageBroadcast, binding.pageSettings)
+                val pages = listOf(
+                    binding.pageDashboard,
+                    binding.pageUsers,
+                    binding.pageTemplates,
+                    binding.pageBroadcast,
+                    binding.pageSettings,
+                )
                 pages.forEachIndexed { index, page -> page.visibility = if (index == tab.position) View.VISIBLE else View.GONE }
             }
             override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab) = Unit
@@ -136,6 +163,11 @@ class AdminActivity : AppCompatActivity() {
             refreshUsers()
         }
         binding.usersRefresh.setOnRefreshListener { refreshUsers() }
+        binding.btnUploadTemplate.setOnClickListener {
+            chooseTemplate.launch(arrayOf("image/png", "image/jpeg", "image/webp", "image/bmp"))
+        }
+        binding.btnRefreshTemplates.setOnClickListener { refreshTemplates() }
+        binding.templatesRefresh.setOnRefreshListener { refreshTemplates() }
         binding.btnPostNotice.setOnClickListener { postNotice() }
         binding.btnClearNotice.setOnClickListener { clearNotice() }
         binding.btnClearPending.setOnClickListener {
@@ -181,6 +213,7 @@ class AdminActivity : AppCompatActivity() {
             binding.userChart.xAxis.isEnabled = false
             binding.userChart.invalidate()
             refreshUsers()
+            refreshTemplates()
             val recent = users.listUsers().take(5)
             binding.recentUsers.text = if (recent.isEmpty()) {
                 "No users yet."
@@ -197,6 +230,86 @@ class AdminActivity : AppCompatActivity() {
             userAdapter.submit(users.listUsers(binding.userSearch.text?.toString().orEmpty(), selectedFilter))
             binding.usersRefresh.isRefreshing = false
         }
+    }
+
+    private fun refreshTemplates() {
+        lifecycleScope.launch {
+            templateAdapter.submit(templates.listAll())
+            binding.templatesRefresh.isRefreshing = false
+        }
+    }
+
+    private fun showTemplateDetailsDialog(uri: android.net.Uri) {
+        val nameInput = com.google.android.material.textfield.TextInputEditText(this).apply {
+            hint = "Template name"
+            singleLine = true
+        }
+        val descriptionInput = com.google.android.material.textfield.TextInputEditText(this).apply {
+            hint = "Description (optional)"
+            setTextColor(Color.WHITE)
+            minLines = 2
+        }
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 0, 48, 0)
+            addView(
+                nameInput,
+                android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+            addView(
+                descriptionInput,
+                android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = 16 },
+            )
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Upload OpenCV template")
+            .setMessage("Choose a clear screenshot crop of the approval target.")
+            .setView(container)
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("UPLOAD") { _, _ ->
+                val name = nameInput.text?.toString()?.trim().orEmpty()
+                if (name.isBlank()) {
+                    nameInput.error = "Enter a template name."
+                    return@setPositiveButton
+                }
+                lifecycleScope.launch {
+                    runCatching {
+                        templates.add(
+                            name = name,
+                            description = descriptionInput.text?.toString().orEmpty(),
+                            uri = uri,
+                            createdBy = admin?.email.orEmpty(),
+                        )
+                    }.onSuccess {
+                        refreshTemplates()
+                        showMessage("Template uploaded", "The image is ready for detection.")
+                    }.onFailure {
+                        showMessage("Upload failed", it.message ?: "Unable to save this image.")
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun confirmDeleteTemplate(id: String) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Delete template?")
+            .setMessage("This removes the image from the local detector.")
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("DELETE") { _, _ ->
+                lifecycleScope.launch {
+                    runCatching { templates.delete(id) }
+                        .onFailure { showMessage("Delete failed", it.message.orEmpty()) }
+                        .onSuccess { refreshTemplates() }
+                }
+            }
+            .show()
     }
 
     private fun approve(user: User, days: Int) {

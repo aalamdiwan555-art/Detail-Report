@@ -6,6 +6,8 @@ Native Kotlin Android implementation of the local, self-hosted blueprint.
 
 - XML activities for authentication, dashboard, and admin control.
 - Room database for users and local image templates.
+- Admin template manager for uploading, previewing, refreshing, and deleting
+  OpenCV detector image templates.
 - Encrypted session metadata with app-private template storage.
 - Pending/approved/rejected/expired/lifetime license handling.
 - Admin actions for 1, 2, or 3 days, lifetime, and rejection.

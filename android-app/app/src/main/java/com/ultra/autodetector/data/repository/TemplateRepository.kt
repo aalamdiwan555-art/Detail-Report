@@ -1,6 +1,8 @@
 package com.ultra.autodetector.data.repository
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import com.ultra.autodetector.data.local.AppDatabase
 import com.ultra.autodetector.data.model.Template
@@ -22,17 +24,43 @@ class TemplateRepository(context: Context) {
             require(name.isNotBlank()) { "Template name is required." }
             val id = UUID.randomUUID().toString()
             val destination = File(directory, "$id.png")
-            appContext.contentResolver.openInputStream(uri).use { input ->
+            val bitmap = appContext.contentResolver.openInputStream(uri).use { input ->
                 requireNotNull(input) { "Unable to read the selected image." }
-                destination.outputStream().use { output -> input.copyTo(output) }
+                BitmapFactory.decodeStream(input)
             }
-            Template(id, name.trim(), description.trim(), destination.absolutePath, createdBy = createdBy)
-                .also { dao.insert(it) }
+            requireNotNull(bitmap) { "The selected file is not a supported image." }
+            require(bitmap.width > 0 && bitmap.height > 0) { "The selected image is empty." }
+            require(bitmap.width <= MAX_TEMPLATE_DIMENSION && bitmap.height <= MAX_TEMPLATE_DIMENSION) {
+                "Template images must be ${MAX_TEMPLATE_DIMENSION} px or smaller."
+            }
+            try {
+                destination.outputStream().use { output ->
+                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                        "Unable to save the template image."
+                    }
+                }
+                Template(
+                    id,
+                    name.trim(),
+                    description.trim(),
+                    destination.absolutePath,
+                    createdBy = createdBy,
+                ).also { dao.insert(it) }
+            } catch (error: Throwable) {
+                destination.delete()
+                throw error
+            } finally {
+                bitmap.recycle()
+            }
         }
 
     suspend fun delete(id: String) = withContext(Dispatchers.IO) {
         val template = dao.findById(id)
         dao.delete(id)
         template?.filePath?.let { File(it).delete() }
+    }
+
+    companion object {
+        private const val MAX_TEMPLATE_DIMENSION = 4_096
     }
 }

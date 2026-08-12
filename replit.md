@@ -45,6 +45,8 @@ The app currently uses local database mode:
 - `android-app/app/src/main/java/com/ultra/autodetector/data/` — Room database and encrypted local session boundaries
 - `android-app/app/src/main/java/com/ultra/autodetector/service/` — capture, gesture, and floating-widget services
 - `android-app/app/src/main/java/com/ultra/autodetector/data/local/` — account, notice, template, and encrypted preference state
+- Admin template uploads are copied into app-private PNG files and indexed in
+  Room before the detector loads them.
 - `docs/ultra-auto-detector-blueprint-report.md` — security and platform review of the uploaded blueprint
 
 ## Architecture decisions
