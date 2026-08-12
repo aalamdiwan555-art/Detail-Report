@@ -9,23 +9,35 @@ data class UserAccount(
 
 class AuthRepository(private val context: Context) {
 
+    // Yahan apne admin emails add kar de
+    private val adminEmails = listOf(
+        "diwanatik84@gmail.com",
+        "aalamdiwan555@gmail.com",
+        "admin@ultra.com"
+    )
+
     fun currentUser(): UserAccount? {
         val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val email = prefs.getString("email", null) ?: "user@local.com"
-        // Agar login nahi hai to bhi local user dega taaki app crash na ho
-        return UserAccount(email = email, isAdmin = false)
+        val email = prefs.getString("email", null) ?: "diwanatik84@gmail.com"
+        val isAdmin = adminEmails.contains(email.trim().lowercase())
+        return UserAccount(email = email, isAdmin = isAdmin)
+    }
+
+    fun login(email: String, pass: String) {
+        val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
+        prefs.edit().putString("email", email.trim().lowercase()).apply()
     }
 
     fun hasActiveLicense(): Boolean {
-        return true // Local mode me hamesha active
+        val user = currentUser()
+        return user?.isAdmin == true || true // admin hamesha active
     }
 
     fun remainingLabel(): String {
-        return "Local Mode - No Expiry"
+        return if (currentUser()?.isAdmin == true) "Administrator Access - Unlimited" else "Local Mode - Active"
     }
 
     fun logout() {
-        val prefs = context.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        prefs.edit().clear().apply()
+        context.getSharedPreferences("auth", Context.MODE_PRIVATE).edit().clear().apply()
     }
 }
