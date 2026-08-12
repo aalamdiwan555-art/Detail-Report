@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Ultra AutoDetector Admin"
+description = "A production admin console for managing Ultra AutoDetector accounts, licenses, detection templates, and audit activity through the PostgreSQL API."
+version = "1.0.0"
+id = "artifacts/ultra-auto-detector-admin"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25803
+
+[services.development]
+run = "pnpm --filter @workspace/ultra-auto-detector-admin run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ultra-auto-detector-admin", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/ultra-auto-detector-admin/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25803"
+BASE_PATH = "/"

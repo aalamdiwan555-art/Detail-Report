@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import cookieParser from "cookie-parser";
 
 const app: Express = express();
 
@@ -26,9 +27,15 @@ app.use(
   }),
 );
 app.use(cors());
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+app.use((error: unknown, request: express.Request, response: express.Response, _next: express.NextFunction) => {
+  request.log.error({ err: error }, "Unhandled request error");
+  response.status(500).json({ message: "An unexpected server error occurred." });
+});
 
 export default app;

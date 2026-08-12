@@ -56,6 +56,7 @@ export const templatesTable = pgTable("templates", {
   description: text("description").notNull().default(""),
   storagePath: text("storage_path"),
   downloadUrl: text("download_url"),
+  imageData: text("image_data"),
   confidence: real("confidence").notNull().default(0.8),
   isActive: boolean("is_active").notNull().default(true),
   createdBy: uuid("created_by")
