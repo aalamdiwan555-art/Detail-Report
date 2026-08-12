@@ -2,107 +2,87 @@ package com.ultra.autodetector.ui.auth
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.HapticFeedbackConstants
 import android.view.View
-import androidx.activity.ComponentActivity
-import androidx.lifecycle.lifecycleScope
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.ultra.autodetector.data.model.User
-import com.ultra.autodetector.data.repository.AuthRepository
-import com.ultra.autodetector.databinding.ActivityAuthBinding
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.tabs.TabLayout
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.button.MaterialButton
+import android.widget.TextView
+import com.google.android.material.card.MaterialCardView
+import com.ultra.autodetector.R
+import com.ultra.autodetector.auth.AuthRepository
 import com.ultra.autodetector.ui.main.MainActivity
-import com.ultra.autodetector.util.TelegramHelper
-import kotlinx.coroutines.launch
 
-class AuthActivity : ComponentActivity() {
-    private lateinit var binding: ActivityAuthBinding
-    private lateinit var auth: AuthRepository
-    private var displayedUser: User? = null
-    private var isRegisterMode = false
+class AuthActivity : AppCompatActivity() {
+
+    private lateinit var authRepo: AuthRepository
+    private var isLoginMode = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityAuthBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        auth = AuthRepository(this)
+        setContentView(R.layout.activity_auth)
 
-        binding.authTabs.addTab(binding.authTabs.newTab().setText("LOGIN"))
-        binding.authTabs.addTab(binding.authTabs.newTab().setText("SIGN UP"))
-        binding.authTabs.addOnTabSelectedListener(object :
-            com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
-            override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) {
-                isRegisterMode = tab.position == 1
-                updateMode()
+        authRepo = AuthRepository(this)
+
+        val prefs = getSharedPreferences("auth", MODE_PRIVATE)
+        if (prefs.contains("email")) {
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return
+        }
+
+        val tabs = findViewById<TabLayout>(R.id.auth_tabs)
+        val inputEmail = findViewById<TextInputEditText>(R.id.input_email)
+        val inputPassword = findViewById<TextInputEditText>(R.id.input_password)
+        val btnLogin = findViewById<MaterialButton>(R.id.btn_login)
+        val btnRegister = findViewById<MaterialButton>(R.id.btn_register)
+        val btnTrial = findViewById<MaterialButton>(R.id.btn_trial)
+        val statusCard = findViewById<MaterialCardView>(R.id.status_card)
+        val statusTitle = findViewById<TextView>(R.id.status_title)
+        val statusDetails = findViewById<TextView>(R.id.status_details)
+        val btnRenew = findViewById<MaterialButton>(R.id.btn_renew)
+
+        tabs.addTab(tabs.newTab().setText("LOGIN"))
+        tabs.addTab(tabs.newTab().setText("SIGN UP"))
+
+        tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab?) {
+                isLoginMode = tab?.position == 0
+                if (isLoginMode) {
+                    btnLogin.visibility = View.VISIBLE
+                    btnRegister.visibility = View.GONE
+                } else {
+                    btnLogin.visibility = View.GONE
+                    btnRegister.visibility = View.VISIBLE
+                }
             }
-
-            override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab) = Unit
-            override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab) = Unit
+            override fun onTabUnselected(tab: TabLayout.Tab?) {}
+            override fun onTabReselected(tab: TabLayout.Tab?) {}
         })
-        binding.btnLogin.setOnClickListener { isRegisterMode = false; submit() }
-        binding.btnRegister.setOnClickListener { isRegisterMode = true; submit() }
-        binding.btnTrial.setOnClickListener { isRegisterMode = true; submit() }
-        binding.btnRenew.setOnClickListener {
-            displayedUser?.let { TelegramHelper.openRenewalChat(this, it) }
-        }
-        updateMode()
 
-        lifecycleScope.launch {
-            auth.currentUser()?.let { account ->
-                if (account.isAdmin || account.hasActiveLicense()) showMain() else showStatus(account)
+        val doAuth = {
+            val email = inputEmail.text.toString().trim()
+            val pass = inputPassword.text.toString().trim()
+            if (email.isNotEmpty() && pass.length >= 4) {
+                authRepo.login(email, pass)
+                startActivity(Intent(this, MainActivity::class.java))
+                finish()
+            } else {
+                inputEmail.error = "Enter valid email & pass > 4"
             }
         }
-    }
 
-    private fun updateMode() {
-        binding.btnLogin.visibility = if (isRegisterMode) View.GONE else View.VISIBLE
-        binding.btnRegister.visibility = if (isRegisterMode) View.VISIBLE else View.GONE
-        binding.btnTrial.visibility = if (isRegisterMode) View.GONE else View.VISIBLE
-    }
+        btnLogin.setOnClickListener { doAuth() }
+        btnRegister.setOnClickListener { doAuth() }
 
-    private fun submit() {
-        val email = binding.inputEmail.text?.toString().orEmpty()
-        val password = binding.inputPassword.text?.toString().orEmpty()
-        binding.root.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-        binding.inputEmail.error = null
-        binding.inputPassword.error = null
-        lifecycleScope.launch {
-            binding.btnLogin.isEnabled = false
-            binding.btnRegister.isEnabled = false
-            binding.btnTrial.isEnabled = false
-            val result = if (isRegisterMode) auth.signup(email, password) else auth.login(email, password)
-            result.onSuccess { user ->
-                if (user.isAdmin || user.hasActiveLicense()) showMain() else showStatus(user)
-            }.onFailure { error ->
-                binding.root.animate().translationX(12f).setDuration(45).withEndAction {
-                    binding.root.animate().translationX(-12f).setDuration(45).withEndAction {
-                        binding.root.animate().translationX(0f).setDuration(45).start()
-                    }.start()
-                }.start()
-                MaterialAlertDialogBuilder(this@AuthActivity)
-                    .setTitle("Could not continue")
-                    .setMessage(error.message ?: "Check your details and try again.")
-                    .setPositiveButton("OK", null)
-                    .show()
-            }
-            binding.btnLogin.isEnabled = true
-            binding.btnRegister.isEnabled = true
-            binding.btnTrial.isEnabled = true
+        btnTrial.setOnClickListener {
+            authRepo.login("diwanatik84@gmail.com", "admin123")
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
         }
-    }
 
-    private fun showStatus(user: User) {
-        displayedUser = user
-        binding.statusCard.visibility = View.VISIBLE
-        binding.statusTitle.text = user.licenseStatus.replaceFirstChar { it.uppercase() }
-        binding.statusDetails.text = user.remainingLabel()
-    }
-
-    private fun showMain() {
-        startActivity(
-            Intent(this, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP),
-        )
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
-        finish()
+        btnRenew.setOnClickListener {
+            statusCard.visibility = View.GONE
+        }
     }
 }
