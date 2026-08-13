@@ -1,6 +1,7 @@
 package com.ultra.autodetector.ui.main
 
 import android.app.Activity
+import android.app.Dialog
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -8,7 +9,6 @@ import android.graphics.drawable.ColorDrawable
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
-import android.view.Dialog
 import android.view.View
 import android.widget.SeekBar
 import android.widget.TextView
