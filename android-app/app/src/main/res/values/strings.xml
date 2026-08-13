@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Ultra AutoDetector</string>
-    <string name="accessibility_service_description">User-controlled gesture and configured multilingual text-target service for Ultra AutoDetector. Gestures are only dispatched after the user starts detection.</string>
-    <string name="accessibility_service_label">Ultra AutoDetector Gesture Service</string>
+    <string name="accessibility_service_description">User-controlled built-in image target detection and gesture service. Gestures are dispatched only after the user starts detection.</string>
+    <string name="accessibility_service_label">Ultra AutoDetector</string>
     <string name="detection_notification_channel">Detection service</string>
-    <string name="detection_notification_title">Detection is running</string>
-    <string name="detection_notification_text">Screen matching is active. Tap to return to controls.</string>
-    <string name="autoclick_notification_title">Auto-click service is active</string>
-    <string name="autoclick_notification_text">User-controlled gestures are ready in the background.</string>
-    <string name="floating_widget_notification_text">Floating controls are available.</string>
+    <string name="detection_notification_title">AutoDetector Running</string>
+    <string name="detection_notification_text">Built-in templates are active. Tap to return to controls.</string>
+    <string name="screen_capture_cancelled">Screen capture permission was cancelled.</string>
 </resources>

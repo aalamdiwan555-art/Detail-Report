@@ -8,34 +8,16 @@ import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 
 /**
- * Clicks a detection rectangle without blocking the accessibility service.
- *
- * Gesture dispatch is the supported fast path. If the target is exposed in the
- * accessibility tree, ACTION_CLICK is attempted when a gesture is rejected.
- * The shell fallback is best-effort only: Android normally denies `input` to an
- * application UID unless the device is rooted, so failure is logged rather
- * than treated as a successful click.
+ * Dispatches a short accessibility gesture and falls back to a clickable
+ * accessibility node when the target app exposes one.
  */
 class FastClicker(
     private val service: AccessibilityService,
     private val handler: Handler,
 ) : AutoCloseable {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    @Volatile private var lastClickAt = 0L
-
-    fun click(rect: Rect): Boolean {
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastClickAt < COOLDOWN_MS || rect.isEmpty) return false
-        lastClickAt = now
-        val x = rect.exactCenterX()
-        val y = rect.exactCenterY()
+    fun click(x: Float, y: Float): Boolean {
         val startedAt = SystemClock.uptimeMillis()
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
@@ -49,27 +31,25 @@ class FastClicker(
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
-                    if (clickAccessibilityNode(rect)) {
+                    if (clickAccessibilityNode(x, y)) {
                         Log.i(TAG, "CLICKED via node at ${x.toInt()},${y.toInt()}")
-                    } else {
-                        clickShell(x, y)
                     }
                 }
             },
             handler,
         )
         if (!accepted) {
-            if (clickAccessibilityNode(rect)) return true
-            clickShell(x, y)
+            clickAccessibilityNode(x, y)
         }
         return accepted
     }
 
-    private fun clickAccessibilityNode(rect: Rect): Boolean {
+    fun click(rect: Rect): Boolean =
+        if (rect.isEmpty) false else click(rect.exactCenterX(), rect.exactCenterY())
+
+    private fun clickAccessibilityNode(targetX: Float, targetY: Float): Boolean {
         val root = service.rootInActiveWindow ?: return false
-        val targetX = rect.exactCenterX().toInt()
-        val targetY = rect.exactCenterY().toInt()
-        return findClickableNode(root, targetX, targetY)?.performAction(
+        return findClickableNode(root, targetX.toInt(), targetY.toInt())?.performAction(
             AccessibilityNodeInfo.ACTION_CLICK,
         ) == true
     }
@@ -90,24 +70,9 @@ class FastClicker(
         return null
     }
 
-    private fun clickShell(x: Float, y: Float) {
-        scope.launch {
-            runCatching {
-                Runtime.getRuntime().exec(arrayOf("input", "tap", x.toInt().toString(), y.toInt().toString()))
-            }.onSuccess {
-                Log.i(TAG, "Shell click fallback requested at ${x.toInt()},${y.toInt()}")
-            }.onFailure {
-                Log.w(TAG, "Shell click fallback unavailable; root is required", it)
-            }
-        }
-    }
-
-    override fun close() {
-        scope.coroutineContext.cancel()
-    }
+    override fun close() = Unit
 
     companion object {
         private const val TAG = "FastClicker"
-        private const val COOLDOWN_MS = 100L
     }
 }

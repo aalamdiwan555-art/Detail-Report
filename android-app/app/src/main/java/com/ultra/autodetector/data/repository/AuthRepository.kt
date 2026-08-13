@@ -94,10 +94,6 @@ class AuthRepository(context: Context) {
 
     fun remainingLabel(user: User): String = user.remainingLabel()
     fun hasActiveLicense(user: User): Boolean = user.hasActiveLicense()
-    fun isAccessibilityGranted() = prefs.isAccessibilityGranted()
-    fun setAccessibilityGranted(value: Boolean) = prefs.setAccessibilityGranted(value)
-    fun isOverlayGranted() = prefs.isOverlayGranted()
-    fun setOverlayGranted(value: Boolean) = prefs.setOverlayGranted(value)
 
     private fun validate(email: String, password: String): String {
         val normalized = email.trim().lowercase()

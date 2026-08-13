@@ -1,50 +1,211 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/ink" android:orientation="vertical">
-<ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
-<TextView android:id="@+id/avatar_text" android:layout_width="48dp" android:layout_height="48dp" android:background="@drawable/bg_glass_card" android:gravity="center" android:text="U" android:textColor="@android:color/white" android:textSize="18sp" android:textStyle="bold" />
-<LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="12dp" android:orientation="vertical">
-<TextView android:id="@+id/account_email" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="user@example.com" android:textColor="@android:color/white" android:textSize="14sp" android:textStyle="bold" />
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="LOCAL MODE" android:textColor="@color/primary" android:textSize="10sp" />
-</LinearLayout>
-<com.google.android.material.button.MaterialButton android:id="@+id/btn_logout" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Logout" android:textColor="@color/error" />
-</LinearLayout>
-<com.google.android.material.card.MaterialCardView android:id="@+id/notice_card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:visibility="gone" app:cardBackgroundColor="@color/card" app:cardCornerRadius="12dp">
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp">
-<TextView android:id="@+id/notice_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@android:color/white" />
-<com.google.android.material.button.MaterialButton android:id="@+id/btn_close_notice" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Close" />
-</LinearLayout>
-</com.google.android.material.card.MaterialCardView>
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="SUBSCRIPTION" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_glass_card" android:orientation="vertical" android:padding="16dp">
-<TextView android:id="@+id/subscription_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Premium Active" android:textColor="@android:color/white" android:textSize="16sp" android:textStyle="bold" />
-<TextView android:id="@+id/subscription_details" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="30 days" android:textColor="@color/muted" />
-<ProgressBar android:id="@+id/subscription_progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" />
-<com.google.android.material.button.MaterialButton android:id="@+id/btn_renew" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Renew" android:visibility="gone" />
-</LinearLayout>
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="PERMISSIONS" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
-<TextView android:id="@+id/permission_hint" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="Grant all permissions" android:textColor="@color/muted" android:textSize="12sp" />
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:orientation="horizontal">
-<include layout="@layout/permission_row_accessibility" />
-<include layout="@layout/permission_row_overlay" />
-</LinearLayout>
-<include layout="@layout/permission_row_capture" />
-    <include layout="@layout/permission_row_background" />
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="DETECTOR" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
- <LinearLayout android:id="@+id/active_templates_card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_glass_card" android:orientation="vertical" android:padding="16dp">
- <TextView android:id="@+id/active_templates_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Found 0 templates active" android:textColor="@android:color/white" android:textSize="14sp" android:textStyle="bold" />
- <TextView android:id="@+id/active_templates_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="No active templates yet. Upload one from Admin Panel." android:textColor="@color/muted" android:textSize="12sp" />
- <LinearLayout android:id="@+id/active_templates_list" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="vertical" />
- </LinearLayout>
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_glass_card" android:orientation="vertical" android:padding="16dp">
-<TextView android:id="@+id/detector_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ready" android:textColor="@android:color/white" android:textSize="14sp" android:textStyle="bold" />
-<TextView android:id="@+id/detector_error" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/error" android:visibility="gone" />
-<com.google.android.material.button.MaterialButton android:id="@+id/btn_start_stop" android:layout_width="match_parent" android:layout_height="56dp" android:layout_marginTop="16dp" android:text="START DETECTION" app:cornerRadius="16dp" />
-<com.google.android.material.button.MaterialButton android:id="@+id/btn_pause" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="PAUSE" android:visibility="gone" />
-</LinearLayout>
-<TextView android:id="@+id/console_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:background="@drawable/bg_glass_card" android:padding="12dp" android:text="> Local console ready" android:textColor="@color/muted" android:textSize="12sp" />
-<com.google.android.material.button.MaterialButton android:id="@+id/btn_admin" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="ADMIN PANEL" android:visibility="gone" />
-</LinearLayout>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/ink"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical">
+            <View
+                android:id="@+id/status_dot"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:background="@drawable/bg_status_red" />
+            <TextView
+                android:id="@+id/status_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:text="STOPPED"
+                android:textColor="@android:color/white"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_logout"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Logout"
+                android:textColor="@color/error" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/account_email"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/muted"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/account_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/primary"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/detector_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="Ready"
+            android:textColor="@android:color/white"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/template_count"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Built-in templates"
+            android:textColor="@color/primary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+        <GridLayout
+            android:id="@+id/template_grid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:columnCount="2"
+            android:useDefaultMargins="true" />
+        <TextView
+            android:id="@+id/no_templates"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="16dp"
+            android:text="Add PNG, JPG, or WEBP files to app/src/main/assets/templates/"
+            android:textColor="@color/muted"
+            android:visibility="gone" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/show_overlay_switch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Show Detection Overlay"
+            android:textColor="@android:color/white" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="PERMISSIONS"
+            android:textColor="@color/primary"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Accessibility"
+                    android:textColor="@android:color/white" />
+                <TextView
+                    android:id="@+id/accessibility_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Required"
+                    android:textColor="@color/error" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_accessibility"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Grant" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Draw over other apps"
+                    android:textColor="@android:color/white" />
+                <TextView
+                    android:id="@+id/overlay_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Required"
+                    android:textColor="@color/error" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_overlay"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Grant" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Notifications"
+                    android:textColor="@android:color/white" />
+                <TextView
+                    android:id="@+id/notification_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Required"
+                    android:textColor="@color/error" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_notifications"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Grant" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_start_detection"
+            android:layout_width="match_parent"
+            android:layout_height="58dp"
+            android:layout_marginTop="22dp"
+            android:text="START DETECTION"
+            android:textColor="@color/ink"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="16dp" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_stop_detection"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="58dp"
+            android:layout_marginTop="8dp"
+            android:text="STOP DETECTION"
+            android:textColor="@color/error"
+            app:cornerRadius="16dp" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_admin"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="ADMIN APPROVAL PANEL"
+            android:visibility="gone" />
+    </LinearLayout>
 </ScrollView>
-</LinearLayout>

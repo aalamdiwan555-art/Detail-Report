@@ -8,18 +8,17 @@ template detection, license handling, and explicit gesture controls.
 ### Android app
 
 - Open `android-app/` in Android Studio with Android SDK platform 35.
-- The app uses a private on-device Room/SQLite database and local-first template
-  synchronization; there is no cross-device cloud provider configured yet.
+- The app uses a private on-device Room/SQLite database for accounts and
+  approval notices. Detection templates are permanent app assets, not database
+  records or synchronized uploads.
 - Build with `./gradlew assembleDebug` from `android-app/` on a machine with Android SDK platform 35.
 - Replit can validate Gradle configuration, but this container does not include the Android SDK, so APK compilation must run on an Android development machine.
 
 The app currently uses local database mode:
 
 - Regular accounts are created as pending and require admin approval.
-- Accounts, licenses, templates, and session state are stored in the device-local Room database.
-- Local mode is not production authentication. Template uploads are copied to a
-  shared app-private directory and broadcast to running detector services on the
-  same device; Firebase/Supabase cross-device delivery still needs to be added.
+- Accounts, licenses, and session state are stored in the device-local Room
+  database. Local mode is not production authentication.
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
@@ -46,11 +45,12 @@ The app currently uses local database mode:
 
 - `android-app/app/src/main/java/com/ultra/autodetector/ui/` — XML activities and adapters
 - `android-app/app/src/main/java/com/ultra/autodetector/data/` — Room database and encrypted local session boundaries
-- `android-app/app/src/main/java/com/ultra/autodetector/service/` — capture, gesture, and floating-widget services
-- `android-app/app/src/main/java/com/ultra/autodetector/data/local/` — account, notice, template, and encrypted preference state
-- Admin template uploads are copied into app-private PNG files and indexed in
-  Room before the detector loads them. `TEMPLATE_UPDATED` invalidates the
-  detector cache immediately, with WorkManager retrying the local notification.
+- `android-app/app/src/main/java/com/ultra/autodetector/service/` — accessibility
+  detector, capture, and optional detection-overlay services
+- `android-app/app/src/main/java/com/ultra/autodetector/data/local/` — account,
+  notice, and encrypted preference state
+- `android-app/app/src/main/assets/templates/` — permanent built-in image
+  templates copied to app-private storage and cached as OpenCV grayscale Mats
 - `docs/ultra-auto-detector-blueprint-report.md` — security and platform review of the uploaded blueprint
 
 ## Architecture decisions
@@ -60,18 +60,19 @@ The app currently uses local database mode:
   with managed provisioning before release.
 - Local database mode keeps the UI usable without cloud credentials.
 - Screen capture and overlay services start only after explicit user actions and permissions.
-- The main screen reports accessibility, overlay, battery-optimization, notification,
-  and manufacturer auto-start readiness. Detection remains disabled until the three
-  core background permissions are granted.
-- Auto-click gestures run through the sticky foreground AccessibilityService with a
-  persistent notification and a wake lock held only while clicking is active.
-- The accessibility service also matches the configured multilingual approval labels while detection is running.
+- The main screen reports detector status, built-in templates, thresholds,
+  accessibility, overlay, and notification readiness.
+- Auto-click gestures run through the sticky foreground AccessibilityService with
+  a persistent notification and an 800 ms cooldown.
+- Template matching runs through OpenCV at 0.70x, 0.85x, 1.0x, and 1.15x scales.
 - MediaProjection authorization is held in memory for the current session instead of being serialized as a reusable token.
 - License renewals extend from the later of the current expiration and now; admin actions are written to Room.
 
 ## Product
 
-Users can sign in or create a pending account, review license status, grant device permissions, start/pause/stop screen detection, and request renewal through Telegram. Trusted administrators can approve/reject users and manage image templates.
+Users can sign in or create a pending account, review license status, grant
+device permissions, and start/stop screen detection. Trusted administrators can
+approve/reject users; built-in template assets are not managed at runtime.
 
 ## User preferences
 

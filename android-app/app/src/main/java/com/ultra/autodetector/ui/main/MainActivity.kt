@@ -1,51 +1,45 @@
 package com.ultra.autodetector.ui.main
 
 import android.app.Activity
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ultra.autodetector.R
 import com.ultra.autodetector.data.repository.AuthRepository
-import com.ultra.autodetector.data.repository.TemplateRepository
-import com.ultra.autodetector.data.local.EncryptedPrefsManager
 import com.ultra.autodetector.databinding.ActivityMainBinding
-import com.ultra.autodetector.service.AutoClickService
-import com.ultra.autodetector.service.DetectionService
-import com.ultra.autodetector.service.FloatingWidgetService
+import com.ultra.autodetector.detector.BuiltInTemplateManager
+import com.ultra.autodetector.service.AutoDetectorService
+import com.ultra.autodetector.service.FloatingOverlayService
 import com.ultra.autodetector.ui.auth.AuthActivity
 import com.ultra.autodetector.util.BackgroundPermissionHelper
-import com.ultra.autodetector.util.Constants
-import com.ultra.autodetector.util.PermissionHelper
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val auth by lazy { AuthRepository(this) }
+    private val templateManager by lazy { BuiltInTemplateManager(this) }
     private var projectionData: Intent? = null
-    private var projectionResultCode: Int = Activity.RESULT_CANCELED
+    private var projectionResultCode = Activity.RESULT_CANCELED
 
     private val projectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK && result.data != null) {
                 projectionResultCode = result.resultCode
                 projectionData = result.data
-                EncryptedPrefsManager(this@MainActivity).apply {
-                    setMediaProjectionGranted(true)
-                    saveMediaProjectionData(result.resultCode)
-                }
+                startDetector()
+            } else {
+                binding.detectorStatus.text = getString(R.string.screen_capture_cancelled)
             }
             refreshUi()
         }
@@ -54,31 +48,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        templateManager.onCreate()
 
-        findViewById<View>(R.id.btn_accessibility).setOnClickListener {
-            startActivity(BackgroundPermissionHelper.accessibilityIntent())
-        }
-        findViewById<View>(R.id.btn_overlay).setOnClickListener {
-            startActivity(BackgroundPermissionHelper.overlayIntent(this))
-        }
-        findViewById<View>(R.id.btn_screen_capture).setOnClickListener {
-            val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            projectionLauncher.launch(manager.createScreenCaptureIntent())
-        }
-        findViewById<View>(R.id.btn_battery).setOnClickListener {
-            runCatching { startActivity(BackgroundPermissionHelper.batteryOptimizationIntent(this)) }
-                .onFailure { openAppDetails() }
-        }
-        findViewById<View>(R.id.btn_notifications).setOnClickListener {
-            requestNotificationPermission()
-        }
-        findViewById<View>(R.id.btn_autostart).setOnClickListener {
-            BackgroundPermissionHelper.openAutoStartSettings(this)
-        }
-
-        binding.btnStartStop.setOnClickListener {
-            if (DetectionService.isRunning) stopDetection() else startDetection()
-        }
+        binding.btnStartDetection.setOnClickListener { requestPermissionsAndStart() }
+        binding.btnStopDetection.setOnClickListener { stopDetector() }
         binding.btnLogout.setOnClickListener {
             lifecycleScope.launch {
                 auth.logout()
@@ -86,15 +59,23 @@ class MainActivity : AppCompatActivity() {
                 finish()
             }
         }
-        binding.btnCloseNotice.setOnClickListener { binding.noticeCard.visibility = View.GONE }
-        binding.btnPause.setOnClickListener { stopDetection() }
         binding.btnAdmin.setOnClickListener {
             startActivity(Intent(this, com.ultra.autodetector.ui.admin.AdminActivity::class.java))
         }
-
-        // Notifications are a runtime permission on Android 13+ and are needed
-        // for the persistent foreground-service notification to be visible.
-        window.decorView.post { requestNotificationPermission() }
+        binding.btnAccessibility.setOnClickListener {
+            startActivity(BackgroundPermissionHelper.accessibilityIntent())
+        }
+        binding.btnOverlay.setOnClickListener {
+            startActivity(BackgroundPermissionHelper.overlayIntent(this))
+        }
+        binding.btnNotifications.setOnClickListener { requestNotificationPermission() }
+        binding.showOverlaySwitch.setOnCheckedChangeListener { _, checked ->
+            if (AutoDetectorService.isRunning && checked) startOverlay()
+            if (AutoDetectorService.isRunning && !checked) stopService(
+                Intent(this, FloatingOverlayService::class.java),
+            )
+        }
+        refreshUi()
     }
 
     override fun onResume() {
@@ -102,167 +83,157 @@ class MainActivity : AppCompatActivity() {
         refreshUi()
     }
 
-    override fun onStart() {
-        super.onStart()
-        val filter = IntentFilter(Constants.ACTION_TEMPLATE_UPDATED)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(templateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(templateReceiver, filter)
-        }
-    }
-
-    override fun onStop() {
-        runCatching { unregisterReceiver(templateReceiver) }
-        super.onStop()
-    }
-
     private fun refreshUi() {
         lifecycleScope.launch {
-            val account = auth.currentUser()
-            if (account == null) {
+            val user = auth.currentUser()
+            if (user == null) {
                 startActivity(Intent(this@MainActivity, AuthActivity::class.java))
                 finish()
                 return@launch
             }
-
-            binding.accountEmail.text = account.email
-            binding.avatarText.text = account.email.firstOrNull()?.uppercase() ?: "U"
-            val activeTemplates = TemplateRepository(this@MainActivity).getActiveTemplates()
-            binding.activeTemplatesList.removeAllViews()
-            activeTemplates.forEach { template ->
-                binding.activeTemplatesList.addView(
-                    TextView(this@MainActivity).apply {
-                        text = "● ${template.name}"
-                        setTextColor(getColor(R.color.primary))
-                        textSize = 13f
-                        setPadding(0, 5, 0, 5)
-                        contentDescription = "Active template ${template.name}"
-                    },
-                )
-            }
-            binding.activeTemplatesEmpty.visibility =
-                if (activeTemplates.isEmpty()) View.VISIBLE else View.GONE
-            binding.activeTemplatesStatus.text =
-                if (DetectionService.isRunning) {
-                    "Scanning... Found ${activeTemplates.size} templates active"
-                } else {
-                    "Found ${activeTemplates.size} templates active"
-                }
-
-            val permissions = BackgroundPermissionHelper.status(this@MainActivity)
-            updatePermission(
-                R.id.accessibility_status,
-                R.id.btn_accessibility,
-                permissions.accessibility,
-                "Accessibility",
-            )
-            updatePermission(
-                R.id.overlay_status,
-                R.id.btn_overlay,
-                permissions.overlay,
-                "Overlay",
-            )
-            updatePermission(
-                R.id.battery_status,
-                R.id.btn_battery,
-                permissions.batteryOptimization,
-                "Battery optimization",
-            )
-            updatePermission(
-                R.id.notifications_status,
-                R.id.btn_notifications,
-                permissions.notifications,
-                "Notifications",
-            )
-            val autoStartStatus = findViewById<TextView>(R.id.autostart_status)
-            autoStartStatus.text = if (permissions.autoStart) "Optional" else "Review"
-            autoStartStatus.setTextColor(
-                getColor(if (permissions.autoStart) R.color.primary else R.color.muted),
-            )
-
-            val captureEnabled = projectionData != null || DetectionService.isRunning
-            findViewById<TextView>(R.id.capture_status).text =
-                if (captureEnabled) "✓ Ready" else "Not ready"
-            findViewById<MaterialButton>(R.id.btn_screen_capture).text =
-                if (captureEnabled) "Ready" else "Grant"
-
-            val hasLicense = account.isAdmin || account.hasActiveLicense()
-            binding.detectorStatus.text = when {
-                DetectionService.isRunning -> "● Running"
-                hasLicense -> "Ready to Start"
-                else -> "License Expired"
-            }
-            binding.permissionHint.text = if (permissions.mainPermissionsGranted) {
-                "Core background permissions granted."
+            binding.accountEmail.text = user.email
+            binding.accountStatus.text = if (user.isAdmin) {
+                "Administrator"
             } else {
-                "For autoclicker to work in background, please allow all permissions."
+                user.licenseStatus.uppercase()
             }
-
-            // The detector needs accessibility, overlay, and battery exemption.
-            // Screen capture is requested after the user presses Start.
-            binding.btnStartStop.isEnabled =
-                DetectionService.isRunning ||
-                    (hasLicense && permissions.mainPermissionsGranted && permissions.notifications)
-            binding.btnStartStop.text =
-                if (DetectionService.isRunning) "STOP DETECTION" else "START DETECTION"
-            binding.btnAdmin.visibility = if (account.isAdmin) View.VISIBLE else View.GONE
+            binding.btnAdmin.visibility = if (user.isAdmin) View.VISIBLE else View.GONE
+            renderTemplates()
+            renderPermissions()
+            renderStatus()
         }
     }
 
-    private fun updatePermission(statusId: Int, buttonId: Int, granted: Boolean, label: String) {
-        val status = findViewById<TextView>(statusId)
-        val button = findViewById<MaterialButton>(buttonId)
-        status.text = if (granted) "✓ Granted" else "Not ready"
-        status.setTextColor(getColor(if (granted) R.color.primary else R.color.error))
-        button.text = if (granted) "Granted" else "Grant"
-        button.isEnabled = !granted
-        button.contentDescription = if (granted) "$label granted" else "Grant $label"
-    }
-
-    private fun startDetection() {
-        val permissions = BackgroundPermissionHelper.status(this)
-        if (!permissions.mainPermissionsGranted || !permissions.notifications) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Permissions required")
-                .setMessage("Accessibility, overlay, battery, and notification permissions are required first.")
-                .setPositiveButton("OPEN ACCESSIBILITY") { _, _ ->
-                    startActivity(BackgroundPermissionHelper.accessibilityIntent())
+    private fun renderTemplates() {
+        binding.templateGrid.removeAllViews()
+        val items = templateManager.getAllTemplates()
+        binding.templateCount.text = "${items.count { it.isActive }} templates active"
+        items.forEach { template ->
+            val card = layoutInflater.inflate(
+                R.layout.item_builtin_template,
+                binding.templateGrid,
+                false,
+            )
+            card.findViewById<TextView>(R.id.template_name).text = template.name
+            card.findViewById<android.widget.ImageView>(R.id.template_image)
+                .setImageBitmap(template.bitmap)
+            card.findViewById<TextView>(R.id.template_active).text =
+                if (template.isActive) "Active" else "Inactive"
+            val seekBar = card.findViewById<SeekBar>(R.id.template_threshold)
+            val thresholdText = card.findViewById<TextView>(R.id.template_threshold_text)
+            val initial = templateManager.thresholdFor(template.id)
+            seekBar.max = 25
+            seekBar.progress = ((initial - 0.70f) * 100).roundToInt().coerceIn(0, 25)
+            thresholdText.text = "Threshold %.2f".format(initial)
+            seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    val value = 0.70f + progress / 100f
+                    thresholdText.text = "Threshold %.2f".format(value)
+                    if (fromUser) templateManager.setThreshold(template.id, value)
                 }
-                .setNegativeButton("CANCEL", null)
-                .show()
-            return
+                override fun onStartTrackingTouch(bar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(bar: SeekBar?) = Unit
+            })
+            binding.templateGrid.addView(card)
         }
-        val data = projectionData
-        if (data == null) {
-            findViewById<View>(R.id.btn_screen_capture).performClick()
-            return
-        }
-        if (!PermissionHelper.allGranted(this, mediaProjectionReady = true)) return
-
-        val intent = Intent(this, DetectionService::class.java)
-            .setAction(DetectionService.ACTION_START)
-            .putExtra(DetectionService.EXTRA_RESULT_CODE, projectionResultCode)
-            .putExtra(DetectionService.EXTRA_RESULT_DATA, data)
-        ContextCompat.startForegroundService(this, intent)
-        ContextCompat.startForegroundService(this, Intent(this, FloatingWidgetService::class.java))
-        refreshUi()
+        binding.noTemplates.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
     }
 
-    private fun stopDetection() {
-        sendBroadcast(Intent(DetectionService.ACTION_STOP).setPackage(packageName))
-        sendBroadcast(Intent(AutoClickService.ACTION_STOP_CLICKING).setPackage(packageName))
-        stopService(Intent(this, DetectionService::class.java))
-        stopService(Intent(this, FloatingWidgetService::class.java))
-        binding.consoleText.text = "> Local console ready"
-        refreshUi()
+    private fun renderPermissions() {
+        val permissions = BackgroundPermissionHelper.status(this)
+        binding.accessibilityStatus.text =
+            if (permissions.accessibility) "Granted" else "Required"
+        binding.overlayStatus.text = if (permissions.overlay) "Granted" else "Required"
+        binding.notificationStatus.text =
+            if (permissions.notifications) "Granted" else "Required"
+        binding.accessibilityStatus.setTextColor(
+            getColor(if (permissions.accessibility) R.color.primary else R.color.error),
+        )
+        binding.overlayStatus.setTextColor(
+            getColor(if (permissions.overlay) R.color.primary else R.color.error),
+        )
+        binding.notificationStatus.setTextColor(
+            getColor(if (permissions.notifications) R.color.primary else R.color.error),
+        )
+    }
+
+    private fun renderStatus() {
+        val running = AutoDetectorService.isRunning
+        binding.statusText.text = if (running) "RUNNING" else "STOPPED"
+        binding.statusDot.setBackgroundResource(
+            if (running) R.drawable.bg_pulse_green else R.drawable.bg_status_red,
+        )
+        binding.btnStartDetection.isEnabled = !running
+        binding.btnStopDetection.isEnabled = running
+        binding.btnStartDetection.alpha = if (running) 0.55f else 1f
+        binding.btnStopDetection.alpha = if (running) 1f else 0.55f
+    }
+
+    private fun requestPermissionsAndStart() {
+        lifecycleScope.launch {
+            val user = auth.currentUser()
+            if (user == null) {
+                startActivity(Intent(this@MainActivity, AuthActivity::class.java))
+                finish()
+                return@launch
+            }
+            if (!user.isAdmin && !user.hasActiveLicense()) {
+                MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle("Approval required")
+                    .setMessage("Your account must be approved before detection can start.")
+                    .setPositiveButton("OK", null)
+                    .show()
+                return@launch
+            }
+            val permissions = BackgroundPermissionHelper.status(this@MainActivity)
+            when {
+                !permissions.accessibility ->
+                    startActivity(BackgroundPermissionHelper.accessibilityIntent())
+                !permissions.overlay ->
+                    startActivity(BackgroundPermissionHelper.overlayIntent(this@MainActivity))
+                !permissions.notifications -> requestNotificationPermission()
+                else -> requestProjection()
+            }
+        }
+    }
+
+    private fun requestProjection() {
+        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionLauncher.launch(manager.createScreenCaptureIntent())
+    }
+
+    private fun startDetector() {
+        val data = projectionData ?: return
+        ContextCompat.startForegroundService(
+            this,
+            Intent(this, AutoDetectorService::class.java)
+                .setAction(AutoDetectorService.ACTION_START)
+                .putExtra(AutoDetectorService.EXTRA_RESULT_CODE, projectionResultCode)
+                .putExtra(AutoDetectorService.EXTRA_RESULT_DATA, data),
+        )
+        if (binding.showOverlaySwitch.isChecked) startOverlay()
+        renderStatus()
+    }
+
+    private fun stopDetector() {
+        startService(Intent(this, AutoDetectorService::class.java).setAction(AutoDetectorService.ACTION_STOP))
+        stopService(Intent(this, FloatingOverlayService::class.java))
+        projectionData = null
+        projectionResultCode = Activity.RESULT_CANCELED
+        renderStatus()
+    }
+
+    private fun startOverlay() {
+        if (Settings.canDrawOverlays(this)) {
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, FloatingOverlayService::class.java),
+            )
+        }
     }
 
     private fun requestNotificationPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-            !BackgroundPermissionHelper.areNotificationsEnabled(this)
-        ) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
@@ -271,22 +242,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val templateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == Constants.ACTION_TEMPLATE_UPDATED) refreshUi()
-        }
-    }
-
-    private fun openAppDetails() {
-        startActivity(
-            Intent(
-                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                android.net.Uri.parse("package:$packageName"),
-            ),
-        )
-    }
-
     companion object {
         private const val REQUEST_NOTIFICATIONS = 7001
     }
 }
+
+private fun Float.roundToInt(): Int = kotlin.math.round(this).toInt()

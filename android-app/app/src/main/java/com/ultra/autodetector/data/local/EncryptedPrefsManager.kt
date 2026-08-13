@@ -41,33 +41,10 @@ class EncryptedPrefsManager(context: Context) {
 
     fun getCurrentNotice(): String? = prefs.getString(KEY_CURRENT_NOTICE, null)
 
-    fun wasDetectorRunning() = prefs.getBoolean(KEY_DETECTOR_WAS_RUNNING, false)
-    fun setDetectorWasRunning(value: Boolean) =
-        prefs.edit().putBoolean(KEY_DETECTOR_WAS_RUNNING, value).apply()
-
-    fun isAccessibilityGranted() = prefs.getBoolean(Constants.KEY_ACCESSIBILITY_GRANTED, false)
-    fun setAccessibilityGranted(value: Boolean) =
-        prefs.edit().putBoolean(Constants.KEY_ACCESSIBILITY_GRANTED, value).apply()
-    fun isOverlayGranted() = prefs.getBoolean(Constants.KEY_OVERLAY_GRANTED, false)
-    fun setOverlayGranted(value: Boolean) =
-        prefs.edit().putBoolean(Constants.KEY_OVERLAY_GRANTED, value).apply()
-    fun isMediaProjectionGranted() = prefs.getBoolean(Constants.KEY_MEDIA_PROJECTION_GRANTED, false)
-    fun setMediaProjectionGranted(value: Boolean) =
-        prefs.edit().putBoolean(Constants.KEY_MEDIA_PROJECTION_GRANTED, value).apply()
-
-    fun saveMediaProjectionData(resultCode: Int) {
-        // Do not serialize permission grants across process/device boundaries.
-        prefs.edit().putInt(Constants.KEY_MEDIA_PROJECTION_RESULT, resultCode).apply()
-    }
-
-    fun getMediaProjectionResultCode(): Int =
-        prefs.getInt(Constants.KEY_MEDIA_PROJECTION_RESULT, -1)
-
     fun clearAll() = prefs.edit().clear().apply()
 
     companion object {
         private const val KEY_CURRENT_USER_JSON = "current_user_json"
         private const val KEY_CURRENT_NOTICE = "current_notice"
-        private const val KEY_DETECTOR_WAS_RUNNING = "detector_was_running"
     }
 }

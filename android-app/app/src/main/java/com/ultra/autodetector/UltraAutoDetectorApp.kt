@@ -4,10 +4,12 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import org.opencv.android.OpenCVLoader
 
 class UltraAutoDetectorApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        runCatching { OpenCVLoader.initLocal() }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,

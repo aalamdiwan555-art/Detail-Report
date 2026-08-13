@@ -1,195 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/ink"
-    android:orientation="vertical">
-
+    android:orientation="vertical"
+    android:padding="16dp">
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:padding="16dp">
+        android:gravity="center_vertical">
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_back"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="‹ Back"
-            android:textColor="@color/primary" />
+            android:text="Back" />
         <TextView
+            android:id="@+id/admin_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="ADMIN CONTROL"
+            android:gravity="center"
+            android:text="USER APPROVAL"
             android:textColor="@android:color/white"
-            android:textSize="19sp"
             android:textStyle="bold" />
-        <TextView
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_logout_admin"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="LOCAL"
-            android:textColor="@color/primary"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:text="Logout"
+            android:textColor="@color/error" />
     </LinearLayout>
-
-    <com.google.android.material.tabs.TabLayout
-        android:id="@+id/admin_tabs"
+    <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:tabIndicatorColor="@color/primary"
-        app:tabSelectedTextColor="@color/primary"
-        app:tabTextColor="@color/muted" />
-
-    <FrameLayout
+        android:layout_marginTop="12dp"
+        android:hint="Search users">
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/user_search"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textEmailAddress" />
+    </com.google.android.material.textfield.TextInputLayout>
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_clear_pending"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="CLEAR PENDING ACCOUNTS"
+        android:textColor="@color/error" />
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/users_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
-        <ScrollView
-            android:id="@+id/page_dashboard"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:fillViewport="true">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-                <TextView
-                    android:text="OVERVIEW"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/primary"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-                
-                <!-- FIXED: Direct TextViews with IDs -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:orientation="horizontal"
-                    android:weightSum="2">
-                    <TextView android:id="@+id/statTotal" android:layout_width="0dp" android:layout_height="80dp" android:layout_weight="1" android:layout_marginEnd="4dp" android:background="@drawable/bg_glass_card" android:gravity="center" android:text="0" android:textColor="@android:color/white" android:textSize="22sp" android:textStyle="bold"/>
-                    <TextView android:id="@+id/statActive" android:layout_width="0dp" android:layout_height="80dp" android:layout_weight="1" android:layout_marginStart="4dp" android:background="@drawable/bg_glass_card" android:gravity="center" android:text="0" android:textColor="@color/primary" android:textSize="22sp" android:textStyle="bold"/>
-                </LinearLayout>
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal"
-                    android:weightSum="2">
-                    <TextView android:id="@+id/statPending" android:layout_width="0dp" android:layout_height="80dp" android:layout_weight="1" android:layout_marginEnd="4dp" android:background="@drawable/bg_glass_card" android:gravity="center" android:text="0" android:textColor="#FFC107" android:textSize="22sp" android:textStyle="bold"/>
-                    <TextView android:id="@+id/statExpired" android:layout_width="0dp" android:layout_height="80dp" android:layout_weight="1" android:layout_marginStart="4dp" android:background="@drawable/bg_glass_card" android:gravity="center" android:text="0" android:textColor="@color/error" android:textSize="22sp" android:textStyle="bold"/>
-                </LinearLayout>
-
-                <com.github.mikephil.charting.charts.BarChart
-                    android:id="@+id/user_chart"
-                    android:layout_width="match_parent"
-                    android:layout_height="190dp"
-                    android:layout_marginTop="18dp"
-                    android:background="@drawable/bg_glass_card" />
-                <TextView android:text="RECENT USERS" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="22dp" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
-                <TextView android:id="@+id/recent_users" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_glass_card" android:padding="16dp" android:textColor="@color/muted" />
-            </LinearLayout>
-        </ScrollView>
-
-        <LinearLayout android:id="@+id/page_users" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp" android:visibility="gone">
-            <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Search users" app:boxBackgroundMode="outline" app:startIconDrawable="@android:drawable/ic_menu_search">
-                <com.google.android.material.textfield.TextInputEditText android:id="@+id/user_search" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text" android:maxLines="1" />
-            </com.google.android.material.textfield.TextInputLayout>
-            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:scrollbars="none">
-                <com.google.android.material.chip.ChipGroup android:id="@+id/filter_chips" android:layout_width="wrap_content" android:layout_height="wrap_content" app:singleSelection="true">
-                    <com.google.android.material.chip.Chip android:id="@+id/chip_all" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:text="All" />
-                    <com.google.android.material.chip.Chip android:id="@+id/chip_pending" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Pending" />
-                    <com.google.android.material.chip.Chip android:id="@+id/chip_approved" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Approved" />
-                    <com.google.android.material.chip.Chip android:id="@+id/chip_expired" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Expired" />
-                </com.google.android.material.chip.ChipGroup>
-            </HorizontalScrollView>
-            <androidx.swiperefreshlayout.widget.SwipeRefreshLayout android:id="@+id/users_refresh" android:layout_width="match_parent" android:layout_height="0dp" android:layout_marginTop="8dp" android:layout_weight="1">
-                <androidx.recyclerview.widget.RecyclerView android:id="@+id/users_list" android:layout_width="match_parent" android:layout_height="match_parent" />
-            </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/page_templates"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="OPENCV TEMPLATES"
-                android:textColor="@color/primary"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="Upload small screenshot crops that the detector should recognize."
-                android:textColor="@color/muted"
-                android:textSize="12sp" />
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_upload_template"
-                    android:layout_width="0dp"
-                    android:layout_height="52dp"
-                    android:layout_weight="1"
-                    android:text="UPLOAD IMAGE"
-                    android:textColor="@color/ink"
-                    app:backgroundTint="@color/primary"
-                    app:cornerRadius="16dp" />
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_refresh_templates"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="52dp"
-                    android:layout_marginStart="8dp"
-                    android:text="REFRESH" />
-            </LinearLayout>
-            <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-                android:id="@+id/templates_refresh"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_marginTop="10dp"
-                android:layout_weight="1">
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/templates_list"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
-            </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-        </LinearLayout>
-
-        <ScrollView android:id="@+id/page_broadcast" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:visibility="gone">
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                <TextView android:text="BROADCAST NOTICE" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
-                <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:hint="Message" app:boxBackgroundMode="outline">
-                    <com.google.android.material.textfield.TextInputEditText android:id="@+id/notice_input" android:layout_width="match_parent" android:layout_height="130dp" android:gravity="top" android:inputType="textCapSentences|textMultiLine" />
-                </com.google.android.material.textfield.TextInputLayout>
-                <com.google.android.material.button.MaterialButton android:id="@+id/btn_post_notice" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="12dp" android:text="POST NOTICE" android:textColor="@color/ink" app:backgroundTint="@color/primary" app:cornerRadius="16dp" />
-                <com.google.android.material.button.MaterialButton android:id="@+id/btn_clear_notice" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="CLEAR NOTICE" android:textColor="@color/error" app:cornerRadius="16dp" />
-                <TextView android:id="@+id/notice_preview" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:background="@drawable/bg_glass_card" android:padding="16dp" android:textColor="@color/muted" />
-            </LinearLayout>
-        </ScrollView>
-
-        <ScrollView android:id="@+id/page_settings" android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:visibility="gone">
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-                <TextView android:text="SETTINGS" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="@color/primary" android:textSize="11sp" android:textStyle="bold" />
-                <TextView android:id="@+id/admin_email_value" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:background="@drawable/bg_glass_card" android:padding="16dp" android:textColor="@android:color/white" />
-                <com.google.android.material.button.MaterialButton android:id="@+id/btn_clear_pending" style="@style/Widget.MaterialComponents.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="18dp" android:text="CLEAR ALL PENDING" android:textColor="@color/error" app:cornerRadius="16dp" />
-                <com.google.android.material.button.MaterialButton android:id="@+id/btn_export_users" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="8dp" android:text="EXPORT USERS TO CSV" android:textColor="@color/ink" app:backgroundTint="@color/primary" app:cornerRadius="16dp" />
-                <TextView android:id="@+id/app_version" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="22dp" android:textColor="@color/muted" />
-                <com.google.android.material.button.MaterialButton android:id="@+id/btn_logout_admin" style="@style/Widget.MaterialComponents.Button.TextButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="LOG OUT" android:textColor="@color/error" />
-            </LinearLayout>
-        </ScrollView>
-    </FrameLayout>
+        android:layout_marginTop="8dp"
+        android:layout_weight="1" />
 </LinearLayout>
