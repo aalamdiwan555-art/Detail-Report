@@ -27,7 +27,10 @@
                 android:textColor="#00FF88"
                 android:textSize="16sp"
                 android:textStyle="bold"
-                android:letterSpacing="0.4" />
+                 android:letterSpacing="0.4"
+                 android:clickable="true"
+                 android:focusable="true"
+                 android:contentDescription="Ultra logo" />
 
             <TextView
                 android:layout_width="wrap_content"

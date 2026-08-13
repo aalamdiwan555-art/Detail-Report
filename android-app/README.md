@@ -26,10 +26,11 @@ New accounts are pending until an administrator approves them. Passwords are
 stored as salted SHA-256 hashes in the local Room database and the current
 session is stored in Android `EncryptedSharedPreferences`.
 
-Administrator authorization accepts only the configured build-time email/hash.
-Administrators approve users; they cannot upload or delete templates. Before
-release, replace local credentials with a trusted server-side or managed
-provisioning path.
+Visible login and sign-up are user-only. Administrator authorization accepts
+only the configured build-time email/hash and is available after holding the
+`ULTRA` logo for six seconds. Administrators approve users; they cannot upload
+or delete templates. Before release, replace local credentials with a trusted
+server-side or managed provisioning path.
 
 ## Build
 
@@ -46,9 +47,13 @@ attempt. The project targets Android API 34 and compiles against platform 35;
 the machine running the command must have Android SDK platform 35 and build
 tools 35.0.0 installed.
 
-On first launch, grant Accessibility, Draw Over Other Apps, and notifications.
-The Start button opens the Android permission flows it needs, then requests
-MediaProjection consent for the current session.
+On the first authenticated visit for each local user, a full-screen setup gate
+requires Accessibility, Draw Over Other Apps, and notification access. Start
+and Stop remain hidden until this setup is complete. The Start button then
+opens the MediaProjection consent flow for the current session.
+
+Regular users cannot view the built-in template gallery. The gallery remains
+available to administrators after they enter through the hidden logo gesture.
 
 ## Safety boundary
 

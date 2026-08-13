@@ -17,6 +17,9 @@ object BackgroundPermissionHelper {
     ) {
         val mainPermissionsGranted: Boolean
             get() = accessibility && overlay
+
+        val allGranted: Boolean
+            get() = accessibility && overlay && notifications
     }
 
     fun status(context: Context): Status = Status(

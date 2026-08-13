@@ -164,29 +164,11 @@ class AuthRepository(context: Context) {
         val inputHash = AdminConfig.hashPass(password)
 
         withContext(Dispatchers.IO) {
-            var userEntity: UserEntity? = userDao.getByEmail(normalizedEmail)
-
-            // Admin login
-            if (userEntity == null && AdminConfig.matches(normalizedEmail, password)) {
-                userEntity = UserEntity(
-                    id = ADMIN_ID,
-                    email = AdminConfig.ADMIN_EMAIL,
-                    passwordHash = AdminConfig.hashPass(password),
-                    isAdmin = true,
-                    licenseStatus = UserEntity.STATUS_APPROVED,
-                    expiryDate = Long.MAX_VALUE,
-                    deviceId = "administrator"
-                )
-                userDao.insert(userEntity)
-                Log.i(TAG, "Admin account created")
+            val account = requireNotNull(userDao.getByEmail(normalizedEmail)) {
+                "Incorrect email or password."
             }
-
-            val account = requireNotNull(userEntity) { "Incorrect email or password." }
-
-            val isPasswordValid = account.passwordHash == inputHash || 
-                (account.isAdmin && AdminConfig.matches(normalizedEmail, password))
-
-            require(isPasswordValid) { "Incorrect email or password." }
+            require(!account.isAdmin) { "Use administrator access from the ULTRA logo." }
+            require(account.passwordHash == inputHash) { "Incorrect email or password." }
 
             userDao.update(account)
 
@@ -195,6 +177,36 @@ class AuthRepository(context: Context) {
 
             Log.i(TAG, "Login successful: $normalizedEmail")
             userModel
+        }
+    }
+
+    /**
+     * Administrator authentication is deliberately kept off the normal login
+     * and sign-up paths. The UI reaches this method only after the hidden
+     * long-press gesture on the ULTRA logo.
+     */
+    suspend fun loginAdmin(email: String, password: String): Result<User> = runCatching {
+        val normalizedEmail = validateEmail(email)
+        require(AdminConfig.matches(normalizedEmail, password)) {
+            "Administrator credentials are invalid."
+        }
+
+        withContext(Dispatchers.IO) {
+            val existing = userDao.getByEmail(normalizedEmail)
+            val account = existing ?: UserEntity(
+                id = ADMIN_ID,
+                email = AdminConfig.ADMIN_EMAIL,
+                passwordHash = AdminConfig.hashPass(password),
+                isAdmin = true,
+                licenseStatus = UserEntity.STATUS_APPROVED,
+                expiryDate = Long.MAX_VALUE,
+                deviceId = "administrator",
+            ).also { userDao.insert(it) }
+
+            require(account.isAdmin) { "This account is not an administrator." }
+            saveSession(account)
+            Log.i(TAG, "Administrator login successful")
+            account.toUserModel()
         }
     }
 

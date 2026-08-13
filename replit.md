@@ -55,13 +55,17 @@ The app currently uses local database mode:
 
 ## Architecture decisions
 
-- Administrator authorization supports the configured build-time credentials and the
-  local offline administrator fallback in `AdminConfig.kt`; replace that fallback
-  with managed provisioning before release.
+- Visible login and sign-up create and authenticate regular user accounts only.
+  Administrator access is intentionally separate: hold the `ULTRA` logo for six
+  seconds, then enter the configured build-time credentials.
 - Local database mode keeps the UI usable without cloud credentials.
+- On a user's first authenticated visit, a full-screen onboarding gate requires
+  accessibility, overlay, and notification permissions before detector controls
+  are revealed. Completion is tracked per local user.
 - Screen capture and overlay services start only after explicit user actions and permissions.
-- The main screen reports detector status, built-in templates, thresholds,
-  accessibility, overlay, and notification readiness.
+- Regular users see account details, permission readiness, and detector controls;
+  built-in templates remain hidden from them. Administrators can view templates
+  in the main screen when needed.
 - Auto-click gestures run through the sticky foreground AccessibilityService with
   a persistent notification and an 800 ms cooldown.
 - Template matching runs through OpenCV at 0.70x, 0.85x, 1.0x, and 1.15x scales.
@@ -70,8 +74,9 @@ The app currently uses local database mode:
 
 ## Product
 
-Users can sign in or create a pending account, review license status, grant
-device permissions, and start/stop screen detection. Trusted administrators can
+Users can sign in or create a pending account, complete one-time device
+permission setup, review license status, and start/stop screen detection.
+Trusted administrators enter through the six-second logo gesture and can
 approve/reject users; built-in template assets are not managed at runtime.
 
 ## User preferences

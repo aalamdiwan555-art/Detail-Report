@@ -56,6 +56,12 @@ class EncryptedPrefsManager(context: Context) {
     fun setCurrentNotice(notice: String?) = writeString(KEY_CURRENT_NOTICE, notice)
     fun getCurrentNotice(): String? = readString(KEY_CURRENT_NOTICE)
 
+    fun isPermissionOnboardingComplete(userId: String): Boolean =
+        readString("$KEY_PERMISSION_ONBOARDING_PREFIX$userId") == "true"
+
+    fun setPermissionOnboardingComplete(userId: String, complete: Boolean) =
+        writeString("$KEY_PERMISSION_ONBOARDING_PREFIX$userId", complete.toString())
+
     fun clearAll() {
         runCatching { prefs.edit().clear().apply() }
         runCatching { fallbackPrefs.edit().clear().apply() }
@@ -64,5 +70,6 @@ class EncryptedPrefsManager(context: Context) {
     companion object {
         private const val KEY_CURRENT_USER_JSON = "current_user_json"
         private const val KEY_CURRENT_NOTICE = "current_notice"
+        private const val KEY_PERMISSION_ONBOARDING_PREFIX = "permission_onboarding_"
     }
 }

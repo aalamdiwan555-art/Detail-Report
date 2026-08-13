@@ -16,6 +16,21 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical">
+            <TextView
+                android:id="@+id/logo_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ULTRA"
+                android:textColor="@color/primary"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.4"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Ultra logo" />
+            <Space
+                android:layout_width="12dp"
+                android:layout_height="1dp" />
             <View
                 android:id="@+id/status_dot"
                 android:layout_width="14dp"
@@ -53,6 +68,24 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:textColor="@color/primary"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/account_details_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="ACCOUNT DETAILS"
+            android:textColor="@color/primary"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/account_details"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/muted"
             android:textSize="12sp" />
 
         <TextView
@@ -181,31 +214,29 @@
             </LinearLayout>
         </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_start_detection"
-            android:layout_width="match_parent"
-            android:layout_height="58dp"
-            android:layout_marginTop="22dp"
-            android:text="START DETECTION"
-            android:textColor="@color/ink"
-            app:backgroundTint="@color/primary"
-            app:cornerRadius="16dp" />
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_stop_detection"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="58dp"
-            android:layout_marginTop="8dp"
-            android:text="STOP DETECTION"
-            android:textColor="@color/error"
-            app:cornerRadius="16dp" />
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_admin"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        <LinearLayout
+            android:id="@+id/detector_controls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="ADMIN APPROVAL PANEL"
-            android:visibility="gone" />
+            android:orientation="vertical">
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_start_detection"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:layout_marginTop="22dp"
+                android:text="START DETECTION"
+                android:textColor="@color/ink"
+                app:backgroundTint="@color/primary"
+                app:cornerRadius="16dp" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_stop_detection"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="58dp"
+                android:layout_marginTop="8dp"
+                android:text="STOP DETECTION"
+                android:textColor="@color/error"
+                app:cornerRadius="16dp" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

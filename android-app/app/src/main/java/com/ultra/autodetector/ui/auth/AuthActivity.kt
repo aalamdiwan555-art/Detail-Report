@@ -8,12 +8,15 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.textfield.TextInputEditText
 import com.ultra.autodetector.R
 import com.ultra.autodetector.data.repository.AuthRepository
+import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.main.MainActivity
+import com.ultra.autodetector.util.LongPressAccessGesture
 import kotlinx.coroutines.launch
 
 class AuthActivity : AppCompatActivity() {
@@ -103,6 +106,9 @@ class AuthActivity : AppCompatActivity() {
             override fun onTabReselected(tab: TabLayout.Tab?) = Unit
         })
 
+        logo?.let { logoView ->
+            LongPressAccessGesture.attach(logoView) { showAdminAccessDialog() }
+        }
         btnAction?.setOnClickListener { performAuth() }
     }
 
@@ -161,6 +167,45 @@ class AuthActivity : AppCompatActivity() {
     private fun showAuthError(message: String) {
         etEmail?.error = message
         etEmail?.requestFocus()
+    }
+
+    private fun showAdminAccessDialog() {
+        val content = layoutInflater.inflate(R.layout.dialog_admin_access, null)
+        val email = content.findViewById<TextInputEditText>(R.id.admin_email)
+        val password = content.findViewById<TextInputEditText>(R.id.admin_password)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setView(content)
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("OPEN ADMIN", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                val enteredEmail = email.text?.toString()?.trim().orEmpty()
+                val enteredPassword = password.text?.toString().orEmpty()
+                if (enteredEmail.isBlank() || enteredPassword.isBlank()) {
+                    email.error = "Enter administrator credentials"
+                    return@setOnClickListener
+                }
+
+                it.isEnabled = false
+                lifecycleScope.launch {
+                    authRepo.loginAdmin(enteredEmail, enteredPassword)
+                        .onSuccess {
+                            dialog.dismiss()
+                            startActivity(Intent(this@AuthActivity, AdminActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            })
+                            finish()
+                        }
+                        .onFailure { error ->
+                            it.isEnabled = true
+                            password.error = error.message ?: "Administrator authentication failed"
+                        }
+                }
+            }
+        }
+        dialog.show()
     }
 
     private fun openMain() {
