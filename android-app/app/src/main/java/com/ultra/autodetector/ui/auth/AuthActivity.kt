@@ -27,6 +27,7 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var authRepo: AuthRepository
     private var navigationStarted = false
     private var lastNavigationTime = 0L
+    private var adminAccessInProgress = false
 
     private var tabs: TabLayout? = null
     private var etEmail: TextInputEditText? = null
@@ -75,7 +76,7 @@ class AuthActivity : AppCompatActivity() {
 
                 authRepo.currentUser()?.let {
                     Log.i(TAG, "Valid session: ${it.email}")
-                    openMain()
+                    if (it.isAdmin) openAdminActivity() else openMain()
                 } ?: run {
                     Log.w(TAG, "Stale session, clearing")
                     authRepo.logout()
@@ -169,19 +170,30 @@ class AuthActivity : AppCompatActivity() {
     }
 
     private fun openAdminPanel() {
+        if (adminAccessInProgress || isFinishing || isDestroyed) return
+        adminAccessInProgress = true
+        logoTarget?.isEnabled = false
+
         lifecycleScope.launch {
             authRepo.loginAdmin()
                 .onSuccess {
-                    startActivity(Intent(this@AuthActivity, AdminActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    })
-                    finish()
+                    openAdminActivity()
                 }
                 .onFailure { error ->
                     Log.e(TAG, "Unable to open administrator panel", error)
+                    adminAccessInProgress = false
+                    logoTarget?.isEnabled = true
                     showAuthError("Unable to open administrator panel")
                 }
         }
+    }
+
+    private fun openAdminActivity() {
+        if (isFinishing || isDestroyed) return
+        startActivity(Intent(this, AdminActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        })
+        finish()
     }
 
     private fun openMain() {

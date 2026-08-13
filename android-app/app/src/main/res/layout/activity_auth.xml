@@ -66,6 +66,14 @@
                 android:textColor="#888888"
                 android:textSize="14sp" />
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Administrator access: tap ULTRA ten times"
+                android:textColor="#00AA66"
+                android:textSize="12sp" />
+
             <com.google.android.material.tabs.TabLayout
                 android:id="@+id/tab_layout"
                 android:layout_width="match_parent"

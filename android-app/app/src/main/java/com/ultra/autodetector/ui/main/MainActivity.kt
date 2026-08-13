@@ -48,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private var projectionResultCode = Activity.RESULT_CANCELED
     private var permissionDialog: Dialog? = null
     private var permissionDialogUserId: String? = null
+    private var adminAccessInProgress = false
 
     private val projectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -315,6 +316,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openAdminPanel() {
+        if (adminAccessInProgress || isFinishing || isDestroyed) return
+        adminAccessInProgress = true
+        binding.logoAccessTarget.isEnabled = false
+
         lifecycleScope.launch {
             auth.loginAdmin()
                 .onSuccess {
@@ -324,6 +329,8 @@ class MainActivity : AppCompatActivity() {
                     finish()
                 }
                 .onFailure { error ->
+                    adminAccessInProgress = false
+                    binding.logoAccessTarget.isEnabled = true
                     MaterialAlertDialogBuilder(this@MainActivity)
                         .setTitle("Administrator access failed")
                         .setMessage(error.message ?: "Unable to open administrator panel.")
