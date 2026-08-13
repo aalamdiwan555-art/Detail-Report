@@ -182,8 +182,8 @@ class AuthRepository(context: Context) {
 
     /**
      * Administrator authentication is deliberately kept off the normal login
-     * and sign-up paths. The UI reaches this method only after the hidden
-     * six-tap gesture on the ULTRA logo.
+     * and sign-up paths. The UI reaches this method only after the six-tap
+     * gesture on the ULTRA logo.
      */
     suspend fun loginAdmin(email: String, password: String): Result<User> = runCatching {
         val normalizedEmail = validateEmail(email)
@@ -193,17 +193,28 @@ class AuthRepository(context: Context) {
 
         withContext(Dispatchers.IO) {
             val existing = userDao.getByEmail(normalizedEmail)
-            val account = existing ?: UserEntity(
-                id = ADMIN_ID,
-                email = AdminConfig.ADMIN_EMAIL,
-                passwordHash = AdminConfig.hashPass(password),
-                isAdmin = true,
-                licenseStatus = UserEntity.STATUS_APPROVED,
-                expiryDate = Long.MAX_VALUE,
-                deviceId = "administrator",
-            ).also { userDao.insert(it) }
+            val account = if (existing == null) {
+                UserEntity(
+                    id = ADMIN_ID,
+                    email = AdminConfig.ADMIN_EMAIL,
+                    passwordHash = AdminConfig.hashPass(password),
+                    isAdmin = true,
+                    licenseStatus = UserEntity.STATUS_APPROVED,
+                    expiryDate = Long.MAX_VALUE,
+                    deviceId = "administrator",
+                ).also { userDao.insert(it) }
+            } else {
+                // The configured admin identity must win over an older local
+                // regular-user record with the same email.
+                existing.copy(
+                    passwordHash = AdminConfig.hashPass(password),
+                    isAdmin = true,
+                    licenseStatus = UserEntity.STATUS_APPROVED,
+                    expiryDate = Long.MAX_VALUE,
+                    deviceId = "administrator",
+                ).also { userDao.update(it) }
+            }
 
-            require(account.isAdmin) { "This account is not an administrator." }
             saveSession(account)
             Log.i(TAG, "Administrator login successful")
             account.toUserModel()
