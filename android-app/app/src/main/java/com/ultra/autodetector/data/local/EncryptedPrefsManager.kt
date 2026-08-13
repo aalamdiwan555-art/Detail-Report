@@ -10,38 +10,61 @@ import com.ultra.autodetector.util.Constants
  * intentionally not persisted because Android may invalidate them.
  */
 class EncryptedPrefsManager(context: Context) {
-    private val prefs = run {
-        val key = MasterKey.Builder(context)
+    private val appContext = context.applicationContext
+    private val fallbackPrefs by lazy {
+        appContext.getSharedPreferences(
+            "${Constants.PREFS_FILE_NAME}_fallback",
+            Context.MODE_PRIVATE,
+        )
+    }
+    private val prefs = runCatching {
+        val key = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
         EncryptedSharedPreferences.create(
-            context,
+            appContext,
             Constants.PREFS_FILE_NAME,
             key,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
+    }.getOrElse {
+        // Keystore can be unavailable on emulators, restored backups, or after
+        // a damaged key. Local session metadata remains usable without it.
+        fallbackPrefs
     }
 
-    fun getSessionUid(): String? = prefs.getString(Constants.KEY_SESSION_UID, null)
-    fun setSessionUid(uid: String?) =
-        prefs.edit().apply {
-            if (uid == null) remove(Constants.KEY_SESSION_UID) else putString(Constants.KEY_SESSION_UID, uid)
-        }.apply()
+    private fun readString(key: String): String? =
+        runCatching { prefs.getString(key, null) }.getOrElse { fallbackPrefs.getString(key, null) }
 
-    fun saveCurrentUserJson(json: String) =
-        prefs.edit().putString(KEY_CURRENT_USER_JSON, json).apply()
+    private fun writeString(key: String, value: String?) {
+        runCatching {
+            prefs.edit().apply {
+                if (value == null) remove(key) else putString(key, value)
+            }.apply()
+        }
+        // Keep a recovery copy so a later Keystore failure does not log the
+        // user out. This is metadata only; authentication still uses Room.
+        runCatching {
+            fallbackPrefs.edit().apply {
+                if (value == null) remove(key) else putString(key, value)
+            }.apply()
+        }
+    }
 
-    fun getCurrentUserJson(): String? = prefs.getString(KEY_CURRENT_USER_JSON, null)
+    fun getSessionUid(): String? = readString(Constants.KEY_SESSION_UID)
+    fun setSessionUid(uid: String?) = writeString(Constants.KEY_SESSION_UID, uid)
 
-    fun setCurrentNotice(notice: String?) =
-        prefs.edit().apply {
-            if (notice == null) remove(KEY_CURRENT_NOTICE) else putString(KEY_CURRENT_NOTICE, notice)
-        }.apply()
+    fun saveCurrentUserJson(json: String) = writeString(KEY_CURRENT_USER_JSON, json)
+    fun getCurrentUserJson(): String? = readString(KEY_CURRENT_USER_JSON)
 
-    fun getCurrentNotice(): String? = prefs.getString(KEY_CURRENT_NOTICE, null)
+    fun setCurrentNotice(notice: String?) = writeString(KEY_CURRENT_NOTICE, notice)
+    fun getCurrentNotice(): String? = readString(KEY_CURRENT_NOTICE)
 
-    fun clearAll() = prefs.edit().clear().apply()
+    fun clearAll() {
+        runCatching { prefs.edit().clear().apply() }
+        runCatching { fallbackPrefs.edit().clear().apply() }
+    }
 
     companion object {
         private const val KEY_CURRENT_USER_JSON = "current_user_json"

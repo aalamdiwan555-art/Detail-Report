@@ -23,12 +23,15 @@ import com.ultra.autodetector.service.AutoDetectorService
 import com.ultra.autodetector.service.FloatingOverlayService
 import com.ultra.autodetector.ui.auth.AuthActivity
 import com.ultra.autodetector.util.BackgroundPermissionHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val auth by lazy { AuthRepository(this) }
     private val templateManager by lazy { BuiltInTemplateManager(this) }
+    @Volatile private var templatesReady = false
     private var projectionData: Intent? = null
     private var projectionResultCode = Activity.RESULT_CANCELED
 
@@ -48,7 +51,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        templateManager.onCreate()
 
         binding.btnStartDetection.setOnClickListener { requestPermissionsAndStart() }
         binding.btnStopDetection.setOnClickListener { stopDetector() }
@@ -76,6 +78,15 @@ class MainActivity : AppCompatActivity() {
             )
         }
         refreshUi()
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) {
+                (application as? com.ultra.autodetector.UltraAutoDetectorApp)
+                    ?.ensureOpenCvLoaded()
+                templateManager.onCreate()
+            }
+            templatesReady = true
+            refreshUi()
+        }
     }
 
     override fun onResume() {
@@ -98,10 +109,15 @@ class MainActivity : AppCompatActivity() {
                 user.licenseStatus.uppercase()
             }
             binding.btnAdmin.visibility = if (user.isAdmin) View.VISIBLE else View.GONE
-            renderTemplates()
+            if (templatesReady) renderTemplates()
             renderPermissions()
             renderStatus()
         }
+    }
+
+    override fun onDestroy() {
+        if (templatesReady) templateManager.close()
+        super.onDestroy()
     }
 
     private fun renderTemplates() {

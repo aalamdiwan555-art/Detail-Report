@@ -45,7 +45,9 @@ class AutoDetectorService : AccessibilityService() {
     private lateinit var detectorThread: HandlerThread
     private lateinit var detectorHandler: Handler
     private val analyzing = AtomicBoolean(false)
+    private val frameLock = Any()
     private var latestFrame: Bitmap? = null
+    private var frameInUse: Bitmap? = null
     private var pendingResultCode = Activity.RESULT_CANCELED
     private var pendingResultData: Intent? = null
     private var connected = false
@@ -54,13 +56,18 @@ class AutoDetectorService : AccessibilityService() {
 
     override fun onCreate() {
         super.onCreate()
-        templates = BuiltInTemplateManager(this).also { it.onCreate() }
         detectorThread = HandlerThread("DetectorThread", android.os.Process.THREAD_PRIORITY_DISPLAY)
         detectorThread.start()
-        detectorThread.priority = Thread.MAX_PRIORITY
         detectorHandler = Handler(detectorThread.looper)
         capture = ScreenCapture(this, detectorHandler)
         clicker = FastClicker(this, detectorHandler)
+        detectorHandler.post {
+            if (!application.ensureOpenCvLoaded()) {
+                Log.e(TAG, "OpenCV failed to initialize")
+                return@post
+            }
+            templates = BuiltInTemplateManager(this).also { it.onCreate() }
+        }
     }
 
     override fun onServiceConnected() {
@@ -93,15 +100,24 @@ class AutoDetectorService : AccessibilityService() {
 
     private fun startCaptureIfReady() {
         if (!connected || pendingResultData == null || pendingResultCode != Activity.RESULT_OK) return
+        if (!::templates.isInitialized) {
+            detectorHandler.removeCallbacks(templateReadyRetry)
+            detectorHandler.postDelayed(templateReadyRetry, 40L)
+            return
+        }
         val started = runCatching {
             capture.start(
                 pendingResultCode,
                 pendingResultData!!,
                 onBeforeDisplay = ::startForegroundServiceNotification,
             ) { frame ->
-                val old = latestFrame
-                latestFrame = frame
-                if (old != null && old !== frame && !old.isRecycled) old.recycle()
+                synchronized(frameLock) {
+                    val old = latestFrame
+                    latestFrame = frame
+                    if (old != null && old !== frame && old !== frameInUse && !old.isRecycled) {
+                        old.recycle()
+                    }
+                }
             }
         }.getOrElse {
             Log.e(TAG, "MediaProjection setup failed", it)
@@ -117,6 +133,10 @@ class AutoDetectorService : AccessibilityService() {
         }
     }
 
+    private val templateReadyRetry = Runnable {
+        if (!stopping) startCaptureIfReady()
+    }
+
     private val scanRunnable = object : Runnable {
         override fun run() {
             analyzeLatestFrame()
@@ -125,8 +145,14 @@ class AutoDetectorService : AccessibilityService() {
     }
 
     private fun analyzeLatestFrame() {
-        val frame = latestFrame ?: return
         if (!analyzing.compareAndSet(false, true)) return
+        val frame = synchronized(frameLock) {
+            latestFrame?.also { frameInUse = it }
+        }
+        if (frame == null) {
+            analyzing.set(false)
+            return
+        }
         val startedAt = SystemClock.uptimeMillis()
         val screenRgba = Mat()
         val screenGray = Mat()
@@ -196,6 +222,10 @@ class AutoDetectorService : AccessibilityService() {
             screenRgba.release()
             screenGray.release()
             analyzing.set(false)
+            synchronized(frameLock) {
+                if (frameInUse === frame) frameInUse = null
+                if (latestFrame !== frame && !frame.isRecycled) frame.recycle()
+            }
         }
     }
 
@@ -217,6 +247,7 @@ class AutoDetectorService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {
         if (isRunning) return
+        if (!::templates.isInitialized) return
         val root = rootInActiveWindow ?: return
         val now = SystemClock.elapsedRealtime()
         if (now - lastClickAt < CLICK_COOLDOWN_MS) return
@@ -235,9 +266,11 @@ class AutoDetectorService : AccessibilityService() {
         isRunning = false
         detectorHandler.removeCallbacks(scanRunnable)
         capture.stop()
-        val old = latestFrame
-        latestFrame = null
-        if (old != null && !old.isRecycled) old.recycle()
+        synchronized(frameLock) {
+            val old = latestFrame
+            latestFrame = null
+            if (old != null && old !== frameInUse && !old.isRecycled) old.recycle()
+        }
     }
 
     private fun startForegroundServiceNotification() {
@@ -272,7 +305,7 @@ class AutoDetectorService : AccessibilityService() {
     override fun onDestroy() {
         stopDetection()
         clicker.close()
-        templates.close()
+        if (::templates.isInitialized) templates.close()
         detectorThread.quitSafely()
         if (!stopping) {
             WorkManager.getInstance(this).enqueue(
@@ -283,6 +316,9 @@ class AutoDetectorService : AccessibilityService() {
         }
         super.onDestroy()
     }
+
+    private val application: UltraAutoDetectorApp
+        get() = getApplication() as UltraAutoDetectorApp
 
     private data class Detection(
         val template: BuiltInTemplateManager.Template,
@@ -296,9 +332,9 @@ class AutoDetectorService : AccessibilityService() {
     companion object {
         private const val TAG = "AutoDetectorService"
         private const val NOTIFICATION_ID = 101
-        private const val SCAN_INTERVAL_MS = 100L
+        private const val SCAN_INTERVAL_MS = 180L
         private const val CLICK_COOLDOWN_MS = 800L
-        private val SCALES = doubleArrayOf(0.70, 0.85, 1.0, 1.15)
+        private val SCALES = doubleArrayOf(0.75, 0.90, 1.0, 1.10)
         const val ACTION_START = "com.ultra.autodetector.action.START"
         const val ACTION_STOP = "com.ultra.autodetector.action.STOP"
         const val ACTION_RESTART = "com.ultra.autodetector.action.RESTART"

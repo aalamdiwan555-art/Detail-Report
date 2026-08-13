@@ -18,22 +18,16 @@ class AuthRepository(context: Context) {
     private val database by lazy { AppDatabase.getInstance(appContext) }
     private val users by lazy { database.userDao() }
     
-    // FIX: EncryptedPrefs crash-proof banaya
-    private var prefs: EncryptedPrefsManager? = null
+    // Constructed only when a session is read or written, never during the
+    // first activity's view setup.
+    private val prefs: EncryptedPrefsManager? by lazy {
+        runCatching { EncryptedPrefsManager(appContext) }.getOrNull()
+    }
     private val fallbackPrefs: SharedPreferences by lazy {
         appContext.getSharedPreferences("ultra_fallback_prefs", Context.MODE_PRIVATE)
     }
     private val authPrefs: SharedPreferences by lazy {
         appContext.getSharedPreferences("auth", Context.MODE_PRIVATE)
-    }
-
-    init {
-        try {
-            prefs = EncryptedPrefsManager(appContext)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            prefs = null // fallback use hoga
-        }
     }
 
     private fun getSessionUidSafe(): String? {
@@ -130,7 +124,10 @@ class AuthRepository(context: Context) {
 
     fun isLoggedIn(): Boolean {
         return try {
-            getSessionUidSafe() != null || authPrefs.contains("email")
+            // authPrefs is intentionally plain and tiny; it is the fast
+            // synchronous source used by the launch activity. Encrypted
+            // preferences and Room are read from suspend/IO paths.
+            authPrefs.getString("email", null) != null
         } catch (_: Exception) {
             false
         }

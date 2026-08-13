@@ -30,6 +30,25 @@ class FloatingOverlayService : android.app.Service() {
                 stopSelf()
                 return
             }
+
+            val notification = NotificationCompat.Builder(this, UltraAutoDetectorApp.CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_menu_view)
+                .setContentTitle("Detection overlay")
+                .setContentText("Showing the last matched target")
+                .setOngoing(true)
+                .build()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceCompat.startForeground(
+                    this,
+                    102,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            } else {
+                startForeground(102, notification)
+            }
+
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             overlay = DetectionOverlay(this).apply {
                 visibility = View.GONE
@@ -44,19 +63,6 @@ class FloatingOverlayService : android.app.Service() {
             )
             params.gravity = Gravity.TOP or Gravity.START
             windowManager?.addView(overlay, params)
-
-            val notification = NotificationCompat.Builder(this, UltraAutoDetectorApp.CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_menu_view)
-                .setContentTitle("Detection overlay")
-                .setContentText("Showing the last matched target")
-                .setOngoing(true)
-                .build()
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ServiceCompat.startForeground(this, 102, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-            } else {
-                startForeground(102, notification)
-            }
         } catch (e: Exception) {
             e.printStackTrace()
             stopSelf()
@@ -78,6 +84,7 @@ class FloatingOverlayService : android.app.Service() {
     }
 
     override fun onDestroy() {
+        overlay?.hide()
         try { overlay?.let { windowManager?.removeView(it) } } catch (_: Exception) {}
         overlay = null
         super.onDestroy()

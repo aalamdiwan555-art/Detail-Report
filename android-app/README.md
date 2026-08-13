@@ -37,13 +37,15 @@ or managed provisioning path.
 From a machine with Android SDK platform 35 and build tools installed:
 
 ```bash
-./gradlew assembleDebug
+./gradlew assembleDebug --no-daemon
 ```
 
-The current Replit container has Java and Gradle but no Android SDK, so APK
-compilation cannot be completed here. Install Android SDK platform 35 and build
-tools, then run the command from `android-app/`. The project targets Android
-API 34 and compiles against platform 35.
+The debug APK is written to
+`app/build/outputs/apk/debug/app-debug.apk`. The GitHub Actions workflow also
+uploads that file as `ultra-auto-detector-debug-apk` after every Android build
+attempt. The project targets Android API 34 and compiles against platform 35;
+the machine running the command must have Android SDK platform 35 and build
+tools 35.0.0 installed.
 
 On first launch, grant Accessibility, Draw Over Other Apps, and notifications.
 The Start button opens the Android permission flows it needs, then requests

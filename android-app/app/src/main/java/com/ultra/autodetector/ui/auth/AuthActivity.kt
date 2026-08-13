@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 
 class AuthActivity : AppCompatActivity() {
     private lateinit var authRepo: AuthRepository
+    private var navigationStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,25 +25,26 @@ class AuthActivity : AppCompatActivity() {
             setContentView(R.layout.activity_auth)
         } catch (e: Exception) {
             e.printStackTrace()
-            // Layout crash hai to direct main khol de taaki black screen na aaye
-            openMain()
+            // Do not launch MainActivity from a failed login layout; that
+            // hides the original crash and can send the user back to launcher.
             return
         }
 
         authRepo = AuthRepository(this)
 
-        // Login check safe banaya
-        try {
-            if (authRepo.isLoggedIn()) {
-                lifecycleScope.launch {
-                    try {
-                        if (authRepo.currentUser() != null) openMain() else authRepo.logout()
-                    } catch (_: Exception) {
+        if (runCatching { authRepo.isLoggedIn() }.getOrDefault(false)) {
+            lifecycleScope.launch {
+                try {
+                    if (authRepo.currentUser() != null) {
+                        openMain()
+                    } else {
                         authRepo.logout()
                     }
+                } catch (_: Exception) {
+                    runCatching { authRepo.logout() }
                 }
             }
-        } catch (_: Exception) {}
+        }
 
         val tabs = findViewById<TabLayout>(R.id.tab_layout)
         val etEmail = findViewById<TextInputEditText>(R.id.et_email)
@@ -124,9 +126,14 @@ class AuthActivity : AppCompatActivity() {
     }
 
     private fun openMain() {
+        if (navigationStarted || isFinishing || isDestroyed) return
+        navigationStarted = true
         try {
             startActivity(Intent(this, MainActivity::class.java))
-        } catch (_: Exception) {}
-        finish()
+            finish()
+        } catch (error: Exception) {
+            navigationStarted = false
+            error.printStackTrace()
+        }
     }
 }
