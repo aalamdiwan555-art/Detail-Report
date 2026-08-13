@@ -57,7 +57,7 @@ The app currently uses local database mode:
 
 - Visible login and sign-up create and authenticate regular user accounts only.
   Administrator access is intentionally separate: tap the `ULTRA` logo six
-  times, then enter the configured build-time credentials.
+  times, then enter the configured build-time administrator password.
 - Local database mode keeps the UI usable without cloud credentials.
 - On a user's first authenticated visit, a full-screen onboarding gate requires
   accessibility, overlay, and notification permissions before detector controls

@@ -33,10 +33,10 @@ app does not use Firebase, Supabase, Google APIs, cloud auth, or API keys.
 
 ## Security decisions
 
-Administrator email and password hash are supplied only at build time through
-`ULTRA_ADMIN_EMAIL` and `ULTRA_ADMIN_PASSWORD_HASH`. The password itself is
-never stored in source control. If those values are absent, administrator
-access is disabled instead of silently falling back to a demo credential.
+The administrator password hash is supplied only at build time through
+`ULTRA_ADMIN_PASSWORD_HASH`. The password itself is never stored in source
+control. If the value is absent, administrator access is disabled instead of
+silently falling back to a demo credential.
 
 MediaProjection grants are held in memory for the current app session. The
 reboot receiver may restore the floating controls when overlay permission is

@@ -316,7 +316,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun showAdminAccessDialog() {
         val content = layoutInflater.inflate(R.layout.dialog_admin_access, null)
-        val email = content.findViewById<android.widget.EditText>(R.id.admin_email)
         val password = content.findViewById<android.widget.EditText>(R.id.admin_password)
         val dialog = MaterialAlertDialogBuilder(this)
             .setView(content)
@@ -326,16 +325,15 @@ class MainActivity : AppCompatActivity() {
 
         dialog.setOnShowListener {
             dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
-                val enteredEmail = email.text?.toString()?.trim().orEmpty()
                 val enteredPassword = password.text?.toString().orEmpty()
-                if (enteredEmail.isBlank() || enteredPassword.isBlank()) {
-                    email.error = "Enter administrator credentials"
+                if (enteredPassword.isBlank()) {
+                    password.error = "Enter administrator password"
                     return@setOnClickListener
                 }
 
                 it.isEnabled = false
                 lifecycleScope.launch {
-                    auth.loginAdmin(enteredEmail, enteredPassword)
+                    auth.loginAdmin(enteredPassword)
                         .onSuccess {
                             dialog.dismiss()
                             startActivity(Intent(this@MainActivity, AdminActivity::class.java).apply {

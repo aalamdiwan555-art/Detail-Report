@@ -42,7 +42,6 @@ jobs:
 
       - name: Build debug APK
         env:
-          ULTRA_ADMIN_EMAIL: ${{ secrets.ULTRA_ADMIN_EMAIL }}
           ULTRA_ADMIN_PASSWORD_HASH: ${{ secrets.ULTRA_ADMIN_PASSWORD_HASH }}
         run: gradle --no-daemon assembleDebug
 

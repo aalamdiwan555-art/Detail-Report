@@ -19,6 +19,7 @@ class AuthRepository(context: Context) {
     companion object {
         private const val TAG = "AuthRepository"
         private const val ADMIN_ID = "local-admin"
+        private const val ADMIN_ACCOUNT_EMAIL = "administrator@local"
         private const val PREFS_AUTH = "auth_v2"
         private const val PREFS_FALLBACK = "ultra_fallback_prefs_v2"
 
@@ -123,10 +124,6 @@ class AuthRepository(context: Context) {
         val normalizedEmail = validateEmail(email)
         val hashedPassword = AdminConfig.hashPass(password)
 
-        require(!AdminConfig.isReservedEmail(normalizedEmail)) {
-            "This email is reserved for administrator."
-        }
-
         withContext(Dispatchers.IO) {
             require(userDao.getByEmail(normalizedEmail) == null) {
                 "An account with this email already exists."
@@ -185,18 +182,17 @@ class AuthRepository(context: Context) {
      * and sign-up paths. The UI reaches this method only after the six-tap
      * gesture on the ULTRA logo.
      */
-    suspend fun loginAdmin(email: String, password: String): Result<User> = runCatching {
-        val normalizedEmail = validateEmail(email)
-        require(AdminConfig.matches(normalizedEmail, password)) {
-            "Administrator credentials are invalid."
+    suspend fun loginAdmin(password: String): Result<User> = runCatching {
+        require(AdminConfig.matchesPassword(password)) {
+            "Administrator password is invalid or not configured in this APK."
         }
 
         withContext(Dispatchers.IO) {
-            val existing = userDao.getByEmail(normalizedEmail)
+            val existing = userDao.getById(ADMIN_ID)
             val account = if (existing == null) {
                 UserEntity(
                     id = ADMIN_ID,
-                    email = AdminConfig.ADMIN_EMAIL,
+                    email = ADMIN_ACCOUNT_EMAIL,
                     passwordHash = AdminConfig.hashPass(password),
                     isAdmin = true,
                     licenseStatus = UserEntity.STATUS_APPROVED,
@@ -204,8 +200,8 @@ class AuthRepository(context: Context) {
                     deviceId = "administrator",
                 ).also { userDao.insert(it) }
             } else {
-                // The configured admin identity must win over an older local
-                // regular-user record with the same email.
+                // Keep the local administrator record aligned with the
+                // configured password on every successful admin login.
                 existing.copy(
                     passwordHash = AdminConfig.hashPass(password),
                     isAdmin = true,

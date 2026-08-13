@@ -4,9 +4,6 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
-val configuredAdminEmail = providers.gradleProperty("ultraAdminEmail")
-    .orElse(providers.environmentVariable("ULTRA_ADMIN_EMAIL"))
-    .orElse("")
 val configuredAdminPasswordHash = providers.gradleProperty("ultraAdminPasswordHash")
     .orElse(providers.environmentVariable("ULTRA_ADMIN_PASSWORD_HASH"))
     .orElse("")
@@ -24,7 +21,6 @@ android {
         targetSdk = 34
         versionCode = 2
         versionName = "2.0.0-fixed"
-        buildConfigField("String", "ULTRA_ADMIN_EMAIL", quoteBuildConfig(configuredAdminEmail.get()))
         buildConfigField("String", "ULTRA_ADMIN_PASSWORD_HASH", quoteBuildConfig(configuredAdminPasswordHash.get()))
     }
 
