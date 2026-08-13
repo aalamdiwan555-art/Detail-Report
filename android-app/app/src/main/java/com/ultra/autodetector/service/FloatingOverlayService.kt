@@ -16,7 +16,6 @@ import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import android.content.pm.ServiceInfo
-import com.ultra.autodetector.R
 import com.ultra.autodetector.UltraAutoDetectorApp
 
 class FloatingOverlayService : android.app.Service() {
@@ -27,37 +26,47 @@ class FloatingOverlayService : android.app.Service() {
     override fun onCreate() {
         super.onCreate()
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-                stopSelf()
-                return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (!Settings.canDrawOverlays(this)) {
+                    stopSelf()
+                    return
+                }
             }
 
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             overlay = DetectionOverlay(this)
-            
+
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, // FIX 1: TYPE_PHONE hatao
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHED_MODAL,
                 PixelFormat.TRANSLUCENT
             )
             params.gravity = Gravity.TOP or Gravity.START
-            
+
             windowManager?.addView(overlay, params)
 
             val notification = NotificationCompat.Builder(this, UltraAutoDetectorApp.CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher) // FIX 2: android drawable se crash hota hai
+                .setSmallIcon(android.R.drawable.ic_menu_view)
                 .setContentTitle("Detection overlay")
                 .setContentText("Showing the last matched target")
                 .setOngoing(true)
                 .build()
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ServiceCompat.startForeground(this, 102, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                ServiceCompat.startForeground(
+                    this,
+                    102,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
             } else {
                 startForeground(102, notification)
             }
+
         } catch (e: Exception) {
             e.printStackTrace()
             stopSelf()
@@ -65,20 +74,27 @@ class FloatingOverlayService : android.app.Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_RESULT) {
-            val left = intent.getIntExtra(EXTRA_LEFT, 0)
-            val top = intent.getIntExtra(EXTRA_TOP, 0)
-            val width = intent.getIntExtra(EXTRA_WIDTH, 0)
-            val height = intent.getIntExtra(EXTRA_HEIGHT, 0)
-            if(width > 0 && height > 0) overlay?.show(Rect(left, top, left + width, top + height))
-        } else if (intent?.action == ACTION_STOP) {
-            stopSelf()
-        }
+        try {
+            when (intent?.action) {
+                ACTION_RESULT -> {
+                    val left = intent.getIntExtra(EXTRA_LEFT, 0)
+                    val top = intent.getIntExtra(EXTRA_TOP, 0)
+                    val width = intent.getIntExtra(EXTRA_WIDTH, 0)
+                    val height = intent.getIntExtra(EXTRA_HEIGHT, 0)
+                    if (width > 0 && height > 0) {
+                        overlay?.show(Rect(left, top, left + width, top + height))
+                    }
+                }
+                ACTION_STOP -> stopSelf()
+            }
+        } catch (_: Exception) {}
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        try { overlay?.let { windowManager?.removeView(it) } } catch (_: Exception) {}
+        try {
+            overlay?.let { windowManager?.removeView(it) }
+        } catch (_: Exception) {}
         overlay = null
         super.onDestroy()
     }
@@ -89,10 +105,13 @@ class FloatingOverlayService : android.app.Service() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.RED
             style = Paint.Style.STROKE
-            strokeWidth = 5f
+            strokeWidth = 6f
         }
         private var rectangle: Rect? = null
-        private val hideRunnable = Runnable { rectangle = null; invalidate() }
+        private val hideRunnable = Runnable {
+            rectangle = null
+            invalidate()
+        }
 
         fun show(value: Rect) {
             rectangle = value
@@ -103,7 +122,14 @@ class FloatingOverlayService : android.app.Service() {
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            rectangle?.let { canvas.drawRect(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat(), paint) }
+            val rect = rectangle ?: return
+            canvas.drawRect(
+                rect.left.toFloat(),
+                rect.top.toFloat(),
+                rect.right.toFloat(),
+                rect.bottom.toFloat(),
+                paint
+            )
         }
     }
 
