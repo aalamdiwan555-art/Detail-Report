@@ -1,6 +1,7 @@
 package com.ultra.autodetector.data.repository
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.util.Patterns
 import com.ultra.autodetector.data.local.AppDatabase
@@ -14,9 +15,49 @@ import org.json.JSONObject
 
 class AuthRepository(context: Context) {
     private val appContext = context.applicationContext
-    private val database = AppDatabase.getInstance(appContext)
-    private val users = database.userDao()
-    private val prefs = EncryptedPrefsManager(appContext)
+    private val database by lazy { AppDatabase.getInstance(appContext) }
+    private val users by lazy { database.userDao() }
+    
+    // FIX: EncryptedPrefs crash-proof banaya
+    private var prefs: EncryptedPrefsManager? = null
+    private val fallbackPrefs: SharedPreferences by lazy {
+        appContext.getSharedPreferences("ultra_fallback_prefs", Context.MODE_PRIVATE)
+    }
+    private val authPrefs: SharedPreferences by lazy {
+        appContext.getSharedPreferences("auth", Context.MODE_PRIVATE)
+    }
+
+    init {
+        try {
+            prefs = EncryptedPrefsManager(appContext)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            prefs = null // fallback use hoga
+        }
+    }
+
+    private fun getSessionUidSafe(): String? {
+        return try {
+            prefs?.getSessionUid() ?: fallbackPrefs.getString("session_uid", null)
+        } catch (_: Exception) {
+            fallbackPrefs.getString("session_uid", null)
+        }
+    }
+
+    private fun setSessionUidSafe(id: String) {
+        try {
+            prefs?.setSessionUid(id)
+        } catch (_: Exception) {}
+        try {
+            fallbackPrefs.edit().putString("session_uid", id).apply()
+        } catch (_: Exception) {}
+    }
+
+    private fun clearSessionSafe() {
+        try { prefs?.clearAll() } catch (_: Exception) {}
+        try { fallbackPrefs.edit().clear().apply() } catch (_: Exception) {}
+        try { authPrefs.edit().clear().apply() } catch (_: Exception) {}
+    }
 
     suspend fun signup(email: String, password: String): Result<User> = runCatching {
         val normalizedEmail = validate(email, password)
@@ -74,22 +115,29 @@ class AuthRepository(context: Context) {
     }
 
     suspend fun currentUser(): User? = withContext(Dispatchers.IO) {
-        val localPrefs = appContext.getSharedPreferences("auth", Context.MODE_PRIVATE)
-        val localEmail = localPrefs.getString("email", null)
-        if (localEmail != null) {
-            users.getByEmail(localEmail)?.also(::saveSession)?.let { return@withContext it }
+        try {
+            val localEmail = authPrefs.getString("email", null)
+            if (localEmail != null) {
+                users.getByEmail(localEmail)?.also(::saveSession)?.let { return@withContext it }
+            }
+            val id = getSessionUidSafe() ?: return@withContext null
+            users.getById(id)?.also(::saveSession)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
-        val id = prefs.getSessionUid() ?: return@withContext null
-        users.getById(id)?.also(::saveSession)
     }
 
-    fun isLoggedIn(): Boolean =
-        prefs.getSessionUid() != null ||
-            appContext.getSharedPreferences("auth", Context.MODE_PRIVATE).contains("email")
+    fun isLoggedIn(): Boolean {
+        return try {
+            getSessionUidSafe() != null || authPrefs.contains("email")
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
-        prefs.clearAll()
-        appContext.getSharedPreferences("auth", Context.MODE_PRIVATE).edit().clear().apply()
+        clearSessionSafe()
     }
 
     fun remainingLabel(user: User): String = user.remainingLabel()
@@ -105,22 +153,28 @@ class AuthRepository(context: Context) {
     }
 
     private fun saveSession(user: User) {
-        prefs.setSessionUid(user.id)
-        prefs.saveCurrentUserJson(
-            JSONObject()
-                .put("id", user.id)
-                .put("email", user.email)
-                .put("isAdmin", user.isAdmin)
-                .put("licenseStatus", user.licenseStatus)
-                .put("expiryDate", user.expiryDate)
-                .toString(),
-        )
-        // Also save to simple prefs for MainActivity
-        appContext.getSharedPreferences("auth", Context.MODE_PRIVATE).edit()
-            .putString("email", user.email)
-            .putBoolean("isAdmin", user.isAdmin)
-            .putString("passwordHash", user.passwordHash)
-            .apply()
+        try {
+            setSessionUidSafe(user.id)
+            try {
+                prefs?.saveCurrentUserJson(
+                    JSONObject()
+                        .put("id", user.id)
+                        .put("email", user.email)
+                        .put("isAdmin", user.isAdmin)
+                        .put("licenseStatus", user.licenseStatus)
+                        .put("expiryDate", user.expiryDate)
+                        .toString(),
+                )
+            } catch (_: Exception) {}
+            
+            authPrefs.edit()
+                .putString("email", user.email)
+                .putBoolean("isAdmin", user.isAdmin)
+                .putString("passwordHash", user.passwordHash)
+                .apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun deviceId(): String =
@@ -128,6 +182,6 @@ class AuthRepository(context: Context) {
 
     companion object {
         private const val ADMIN_ID = "local-admin"
-        private const val TRIAL_MILLIS = 7L * 24L * 60L * 60L * 1000L
+        private const val TRIAL_MILLIS = 7L * 24L * 60L * 1000L
     }
 }
