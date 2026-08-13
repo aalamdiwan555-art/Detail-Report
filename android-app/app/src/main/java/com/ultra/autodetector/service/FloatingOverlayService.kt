@@ -31,7 +31,10 @@ class FloatingOverlayService : android.app.Service() {
                 return
             }
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            overlay = DetectionOverlay(this)
+            overlay = DetectionOverlay(this).apply {
+                visibility = View.GONE
+                setBackgroundColor(Color.TRANSPARENT)
+            }
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -68,6 +71,7 @@ class FloatingOverlayService : android.app.Service() {
             val height = intent.getIntExtra(EXTRA_HEIGHT, 0)
             if(width > 0 && height > 0) overlay?.show(Rect(left, top, left + width, top + height))
         } else if (intent?.action == ACTION_STOP) {
+            overlay?.hide()
             stopSelf()
         }
         return START_NOT_STICKY
@@ -88,13 +92,22 @@ class FloatingOverlayService : android.app.Service() {
             strokeWidth = 5f
         }
         private var rectangle: Rect? = null
-        private val hideRunnable = Runnable { rectangle = null; invalidate() }
+        private val hideRunnable = Runnable { hide() }
+
         fun show(value: Rect) {
             rectangle = value
+            visibility = View.VISIBLE
             removeCallbacks(hideRunnable)
             postDelayed(hideRunnable, 700L)
             invalidate()
         }
+
+        fun hide() {
+            rectangle = null
+            visibility = View.GONE
+            invalidate()
+        }
+
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             rectangle?.let { canvas.drawRect(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat(), paint) }
