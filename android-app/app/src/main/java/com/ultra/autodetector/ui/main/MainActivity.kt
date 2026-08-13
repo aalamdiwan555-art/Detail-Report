@@ -8,10 +8,8 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.View
 import android.widget.SeekBar
-import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -28,6 +26,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
+    companion object {
+        private const val REQUEST_NOTIFICATIONS = 7001
+    }
+
     private lateinit var binding: ActivityMainBinding
     private val auth by lazy { AuthRepository(this) }
     private val templateManager by lazy { BuiltInTemplateManager(this) }
@@ -52,13 +54,31 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        lifecycleScope.launch {
+            val user = auth.currentUser()
+            if (user == null) {
+                navigateToAuth()
+                return@launch
+            }
+            setupUi()
+            initializeTemplates()
+        }
+    }
+
+    private fun navigateToAuth() {
+        startActivity(Intent(this, AuthActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        })
+        finish()
+    }
+
+    private fun setupUi() {
         binding.btnStartDetection.setOnClickListener { requestPermissionsAndStart() }
         binding.btnStopDetection.setOnClickListener { stopDetector() }
         binding.btnLogout.setOnClickListener {
             lifecycleScope.launch {
                 auth.logout()
-                startActivity(Intent(this@MainActivity, AuthActivity::class.java))
-                finish()
+                navigateToAuth()
             }
         }
         binding.btnAdmin.setOnClickListener {
@@ -73,15 +93,17 @@ class MainActivity : AppCompatActivity() {
         binding.btnNotifications.setOnClickListener { requestNotificationPermission() }
         binding.showOverlaySwitch.setOnCheckedChangeListener { _, checked ->
             if (AutoDetectorService.isRunning && checked) startOverlay()
-            if (AutoDetectorService.isRunning && !checked) stopService(
-                Intent(this, FloatingOverlayService::class.java),
-            )
+            if (AutoDetectorService.isRunning && !checked) {
+                stopService(Intent(this, FloatingOverlayService::class.java))
+            }
         }
+    }
+
+    private fun initializeTemplates() {
         refreshUi()
         lifecycleScope.launch {
             withContext(Dispatchers.Default) {
-                (application as? com.ultra.autodetector.UltraAutoDetectorApp)
-                    ?.ensureOpenCvLoaded()
+                (application as? com.ultra.autodetector.UltraAutoDetectorApp)?.ensureOpenCvLoaded()
                 templateManager.onCreate()
             }
             templatesReady = true
@@ -91,27 +113,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshUi()
-    }
-
-    private fun refreshUi() {
         lifecycleScope.launch {
             val user = auth.currentUser()
             if (user == null) {
-                startActivity(Intent(this@MainActivity, AuthActivity::class.java))
-                finish()
+                navigateToAuth()
                 return@launch
             }
-            binding.accountEmail.text = user.email
-            binding.accountStatus.text = if (user.isAdmin) {
-                "Administrator"
-            } else {
-                user.licenseStatus.uppercase()
-            }
-            binding.btnAdmin.visibility = if (user.isAdmin) View.VISIBLE else View.GONE
-            if (templatesReady) renderTemplates()
-            renderPermissions()
-            renderStatus()
+            refreshUi()
         }
     }
 
@@ -120,27 +128,42 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    private fun refreshUi() {
+        lifecycleScope.launch {
+            val user = auth.currentUser()
+            if (user == null) {
+                navigateToAuth()
+                return@launch
+            }
+            binding.accountEmail.text = user.email
+            binding.accountStatus.text = if (user.isAdmin) "Administrator" 
+                                         else user.licenseStatus.uppercase()
+            binding.btnAdmin.visibility = if (user.isAdmin) View.VISIBLE else View.GONE
+            if (templatesReady) renderTemplates()
+            renderPermissions()
+            renderStatus()
+        }
+    }
+
     private fun renderTemplates() {
         binding.templateGrid.removeAllViews()
         val items = templateManager.getAllTemplates()
         binding.templateCount.text = "${items.count { it.isActive }} templates active"
+
         items.forEach { template ->
-            val card = layoutInflater.inflate(
-                R.layout.item_builtin_template,
-                binding.templateGrid,
-                false,
-            )
-            card.findViewById<TextView>(R.id.template_name).text = template.name
-            card.findViewById<android.widget.ImageView>(R.id.template_image)
-                .setImageBitmap(template.bitmap)
-            card.findViewById<TextView>(R.id.template_active).text =
+            val card = layoutInflater.inflate(R.layout.item_builtin_template, binding.templateGrid, false)
+            card.findViewById<android.widget.TextView>(R.id.template_name).text = template.name
+            card.findViewById<android.widget.ImageView>(R.id.template_image).setImageBitmap(template.bitmap)
+            card.findViewById<android.widget.TextView>(R.id.template_active).text = 
                 if (template.isActive) "Active" else "Inactive"
+
             val seekBar = card.findViewById<SeekBar>(R.id.template_threshold)
-            val thresholdText = card.findViewById<TextView>(R.id.template_threshold_text)
+            val thresholdText = card.findViewById<android.widget.TextView>(R.id.template_threshold_text)
             val initial = templateManager.thresholdFor(template.id)
             seekBar.max = 25
             seekBar.progress = ((initial - 0.70f) * 100).roundToInt().coerceIn(0, 25)
             thresholdText.text = "Threshold %.2f".format(initial)
+
             seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
                     val value = 0.70f + progress / 100f
@@ -157,28 +180,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderPermissions() {
         val permissions = BackgroundPermissionHelper.status(this)
-        binding.accessibilityStatus.text =
-            if (permissions.accessibility) "Granted" else "Required"
+        binding.accessibilityStatus.text = if (permissions.accessibility) "Granted" else "Required"
         binding.overlayStatus.text = if (permissions.overlay) "Granted" else "Required"
-        binding.notificationStatus.text =
-            if (permissions.notifications) "Granted" else "Required"
-        binding.accessibilityStatus.setTextColor(
-            getColor(if (permissions.accessibility) R.color.primary else R.color.error),
-        )
-        binding.overlayStatus.setTextColor(
-            getColor(if (permissions.overlay) R.color.primary else R.color.error),
-        )
-        binding.notificationStatus.setTextColor(
-            getColor(if (permissions.notifications) R.color.primary else R.color.error),
-        )
+        binding.notificationStatus.text = if (permissions.notifications) "Granted" else "Required"
+
+        val grantedColor = getColor(R.color.primary)
+        val errorColor = getColor(R.color.error)
+        binding.accessibilityStatus.setTextColor(if (permissions.accessibility) grantedColor else errorColor)
+        binding.overlayStatus.setTextColor(if (permissions.overlay) grantedColor else errorColor)
+        binding.notificationStatus.setTextColor(if (permissions.notifications) grantedColor else errorColor)
     }
 
     private fun renderStatus() {
         val running = AutoDetectorService.isRunning
         binding.statusText.text = if (running) "RUNNING" else "STOPPED"
-        binding.statusDot.setBackgroundResource(
-            if (running) R.drawable.bg_pulse_green else R.drawable.bg_status_red,
-        )
+        binding.statusDot.setBackgroundResource(if (running) R.drawable.bg_pulse_green else R.drawable.bg_status_red)
         binding.btnStartDetection.isEnabled = !running
         binding.btnStopDetection.isEnabled = running
         binding.btnStartDetection.alpha = if (running) 0.55f else 1f
@@ -188,11 +204,8 @@ class MainActivity : AppCompatActivity() {
     private fun requestPermissionsAndStart() {
         lifecycleScope.launch {
             val user = auth.currentUser()
-            if (user == null) {
-                startActivity(Intent(this@MainActivity, AuthActivity::class.java))
-                finish()
-                return@launch
-            }
+            if (user == null) { navigateToAuth(); return@launch }
+
             if (!user.isAdmin && !user.hasActiveLicense()) {
                 MaterialAlertDialogBuilder(this@MainActivity)
                     .setTitle("Approval required")
@@ -201,12 +214,11 @@ class MainActivity : AppCompatActivity() {
                     .show()
                 return@launch
             }
+
             val permissions = BackgroundPermissionHelper.status(this@MainActivity)
             when {
-                !permissions.accessibility ->
-                    startActivity(BackgroundPermissionHelper.accessibilityIntent())
-                !permissions.overlay ->
-                    startActivity(BackgroundPermissionHelper.overlayIntent(this@MainActivity))
+                !permissions.accessibility -> startActivity(BackgroundPermissionHelper.accessibilityIntent())
+                !permissions.overlay -> startActivity(BackgroundPermissionHelper.overlayIntent(this@MainActivity))
                 !permissions.notifications -> requestNotificationPermission()
                 else -> requestProjection()
             }
@@ -241,25 +253,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun startOverlay() {
         if (Settings.canDrawOverlays(this)) {
-            ContextCompat.startForegroundService(
-                this,
-                Intent(this, FloatingOverlayService::class.java),
-            )
+            ContextCompat.startForegroundService(this, Intent(this, FloatingOverlayService::class.java))
         }
     }
 
     private fun requestNotificationPermission() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                REQUEST_NOTIFICATIONS,
-            )
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
         }
-    }
-
-    companion object {
-        private const val REQUEST_NOTIFICATIONS = 7001
     }
 }
 

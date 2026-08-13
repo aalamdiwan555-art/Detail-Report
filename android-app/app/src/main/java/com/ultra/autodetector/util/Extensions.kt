@@ -11,8 +11,9 @@ fun Context.showToast(message: CharSequence) =
     Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
 fun Long?.asDateLabel(): String =
-    this?.takeIf { it != Long.MAX_VALUE }?.let { DateFormat.getDateTimeInstance().format(Date(it)) }
-        ?: "Lifetime"
+    this?.takeIf { it != Long.MAX_VALUE }?.let { 
+        DateFormat.getDateTimeInstance().format(Date(it)) 
+    } ?: "Lifetime"
 
 fun Context.openUrl(url: String): Boolean = runCatching {
     startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))

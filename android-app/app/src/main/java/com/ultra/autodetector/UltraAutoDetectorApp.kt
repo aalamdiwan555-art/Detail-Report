@@ -4,19 +4,27 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import android.util.Log
 import org.opencv.android.OpenCVLoader
 
 class UltraAutoDetectorApp : Application() {
+    companion object {
+        private const val TAG = "UltraAutoDetectorApp"
+        const val CHANNEL_ID = "ultra_detection"
+    }
+
     @Volatile
     private var openCvReady = false
 
     override fun onCreate() {
         super.onCreate()
-
         createNotificationChannel()
 
-        // Native library loading is expensive and must not delay the first activity.
-        Thread({ ensureOpenCvLoaded() }, "OpenCVInit").apply {
+        // CRITICAL FIX: OpenCV init on background thread with proper error handling
+        Thread({
+            val loaded = ensureOpenCvLoaded()
+            Log.i(TAG, "OpenCV initialization result: $loaded")
+        }, "OpenCVInit").apply {
             isDaemon = true
             start()
         }
@@ -24,22 +32,25 @@ class UltraAutoDetectorApp : Application() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Detection Service",
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = "Shows when user-controlled screen detection is active"
-            setShowBadge(false)
-            enableVibration(false)
+        try {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Detection Service",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Shows when user-controlled screen detection is active"
+                setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)  // FIX: No sound for service notification
+            }
+            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create notification channel", e)
         }
-        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
     /**
-     * May be called by a detector worker when the background preload has not
-     * completed yet. The synchronized initialization is never called from the
-     * first activity, so cold-start work remains small.
+     * CRITICAL FIX: Thread-safe OpenCV initialization with retry
      */
     fun ensureOpenCvLoaded(): Boolean {
         if (openCvReady) return true
@@ -47,16 +58,20 @@ class UltraAutoDetectorApp : Application() {
             if (openCvReady) {
                 true
             } else {
-                val loaded = runCatching {
-                    OpenCVLoader.initDebug() || runCatching { OpenCVLoader.initLocal() }.getOrDefault(false)
-                }.getOrDefault(false)
+                val loaded = try {
+                    OpenCVLoader.initDebug() || try {
+                        OpenCVLoader.initLocal()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "initLocal failed", e)
+                        false
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "OpenCV initDebug failed", e)
+                    false
+                }
                 openCvReady = loaded
                 loaded
             }
         }
-    }
-
-    companion object {
-        const val CHANNEL_ID = "ultra_detection"
     }
 }

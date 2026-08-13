@@ -10,12 +10,13 @@ import org.opencv.core.Mat
 import org.opencv.imgproc.Imgproc
 import java.io.File
 
-/**
- * Owns the immutable, app-shipped template set. There is deliberately no
- * database or upload path here: replacing files in assets/templates and
- * rebuilding the app is the template update mechanism.
- */
 class BuiltInTemplateManager(context: Context) {
+    companion object {
+        private const val TAG = "BuiltInTemplates"
+        private const val ASSET_DIRECTORY = "templates"
+        const val DEFAULT_THRESHOLD = 0.80f
+    }
+
     data class Template(
         val id: String,
         val name: String,
@@ -26,15 +27,16 @@ class BuiltInTemplateManager(context: Context) {
 
     private val appContext = context.applicationContext
     private val directory = File(appContext.filesDir, "builtin_templates")
-    private val preferences =
-        appContext.getSharedPreferences("builtin_template_settings", Context.MODE_PRIVATE)
+    private val preferences = appContext.getSharedPreferences("builtin_template_settings", Context.MODE_PRIVATE)
+
     private val matCache = object : LruCache<String, Mat>(16) {
         override fun entryRemoved(evicted: Boolean, key: String, oldValue: Mat, newValue: Mat?) {
             if (oldValue !== newValue) oldValue.release()
         }
     }
 
-    @Volatile private var templates: List<Template> = emptyList()
+    @Volatile 
+    private var templates: List<Template> = emptyList()
 
     @Synchronized
     fun onCreate() {
@@ -47,38 +49,51 @@ class BuiltInTemplateManager(context: Context) {
         names.forEach { name ->
             val target = File(directory, name)
             if (!target.exists() || target.length() == 0L) {
-                appContext.assets.open("$ASSET_DIRECTORY/$name").use { input ->
-                    target.outputStream().use { output -> input.copyTo(output) }
+                try {
+                    appContext.assets.open("$ASSET_DIRECTORY/$name").use { input ->
+                        target.outputStream().use { output -> input.copyTo(output) }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to copy template: $name", e)
                 }
             }
         }
 
         val loaded = names.mapNotNull { name ->
-            val bitmap = BitmapFactory.decodeFile(File(directory, name).absolutePath)
-                ?: return@mapNotNull null
-            val rgba = Mat()
-            val gray = Mat()
-            runCatching {
-                Utils.bitmapToMat(bitmap, rgba)
-                Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY)
-                rgba.release()
-                matCache.put(name, gray)
-                Template(
-                    id = name.substringBeforeLast('.'),
-                    name = name,
-                    bitmap = bitmap,
-                    matGray = gray,
-                    isActive = preferences.getBoolean(activeKey(name), true),
-                )
-            }.onFailure {
-                rgba.release()
-                gray.release()
-                bitmap.recycle()
-                Log.e(TAG, "Unable to load built-in template $name", it)
-            }.getOrNull()
+            loadTemplate(name)
         }
+
         templates = loaded
         Log.i(TAG, "Loaded ${loaded.size} built-in templates")
+    }
+
+    private fun loadTemplate(name: String): Template? {
+        val file = File(directory, name)
+        if (!file.exists()) return null
+
+        val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return null
+        val rgba = Mat()
+        val gray = Mat()
+
+        return try {
+            Utils.bitmapToMat(bitmap, rgba)
+            Imgproc.cvtColor(rgba, gray, Imgproc.COLOR_RGBA2GRAY)
+            rgba.release()
+            matCache.put(name, gray)
+            Template(
+                id = name.substringBeforeLast('.'),
+                name = name,
+                bitmap = bitmap,
+                matGray = gray,
+                isActive = preferences.getBoolean(activeKey(name), true),
+            )
+        } catch (e: Exception) {
+            rgba.release()
+            gray.release()
+            bitmap.recycle()
+            Log.e(TAG, "Unable to load built-in template $name", e)
+            null
+        }
     }
 
     fun getAllTemplates(): List<Template> = templates
@@ -109,13 +124,7 @@ class BuiltInTemplateManager(context: Context) {
 
     private fun String.isImageFile(): Boolean =
         lowercase().endsWith(".png") ||
-            lowercase().endsWith(".jpg") ||
-            lowercase().endsWith(".jpeg") ||
-            lowercase().endsWith(".webp")
-
-    companion object {
-        private const val TAG = "BuiltInTemplates"
-        private const val ASSET_DIRECTORY = "templates"
-        const val DEFAULT_THRESHOLD = 0.80f
-    }
+        lowercase().endsWith(".jpg") ||
+        lowercase().endsWith(".jpeg") ||
+        lowercase().endsWith(".webp")
 }

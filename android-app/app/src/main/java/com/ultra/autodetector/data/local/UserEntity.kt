@@ -3,6 +3,7 @@ package com.ultra.autodetector.data.local
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.ultra.autodetector.data.model.User
 import java.util.concurrent.TimeUnit
 
 @Entity(
@@ -31,6 +32,21 @@ data class UserEntity(
         val days = TimeUnit.MILLISECONDS.toDays(remaining)
         val hours = TimeUnit.MILLISECONDS.toHours(remaining) % 24
         return "${days}d ${hours}h remaining"
+    }
+
+    /**
+     * CRITICAL FIX: Convert Entity to Model for UI layer
+     */
+    fun toUserModel(): User {
+        return User(
+            id = id,
+            email = email,
+            isAdmin = isAdmin,
+            licenseStatus = licenseStatus,
+            expiryDate = expiryDate,
+            createdAt = createdAt,
+            deviceId = deviceId
+        )
     }
 
     companion object {

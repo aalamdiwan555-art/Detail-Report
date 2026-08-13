@@ -1,23 +1,22 @@
 package com.ultra.autodetector.data.local
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.ultra.autodetector.util.Constants
 
-/**
- * Stores only local permission/session metadata. MediaProjection tokens are
- * intentionally not persisted because Android may invalidate them.
- */
 class EncryptedPrefsManager(context: Context) {
     private val appContext = context.applicationContext
-    private val fallbackPrefs by lazy {
+
+    private val fallbackPrefs: SharedPreferences by lazy {
         appContext.getSharedPreferences(
             "${Constants.PREFS_FILE_NAME}_fallback",
             Context.MODE_PRIVATE,
         )
     }
-    private val prefs = runCatching {
+
+    private val prefs: SharedPreferences = runCatching {
         val key = MasterKey.Builder(appContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
@@ -29,8 +28,6 @@ class EncryptedPrefsManager(context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     }.getOrElse {
-        // Keystore can be unavailable on emulators, restored backups, or after
-        // a damaged key. Local session metadata remains usable without it.
         fallbackPrefs
     }
 
@@ -43,8 +40,6 @@ class EncryptedPrefsManager(context: Context) {
                 if (value == null) remove(key) else putString(key, value)
             }.apply()
         }
-        // Keep a recovery copy so a later Keystore failure does not log the
-        // user out. This is metadata only; authentication still uses Room.
         runCatching {
             fallbackPrefs.edit().apply {
                 if (value == null) remove(key) else putString(key, value)

@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [UserEntity::class, NoticeEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -15,7 +15,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun noticeDao(): NoticeDao
 
     companion object {
-        private const val DATABASE_NAME = "ultra_auto_detector.db"
+        private const val DATABASE_NAME = "ultra_auto_detector_v2.db"
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -31,6 +31,7 @@ abstract class AppDatabase : RoomDatabase() {
                     .fallbackToDestructiveMigration()
                     .build()
             } catch (e: Exception) {
+                // CRITICAL FIX: If database is corrupted, delete and recreate
                 context.deleteDatabase(DATABASE_NAME)
                 Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
                     .fallbackToDestructiveMigration()

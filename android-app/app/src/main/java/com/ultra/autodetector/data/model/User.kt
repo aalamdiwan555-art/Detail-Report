@@ -1,5 +1,25 @@
 package com.ultra.autodetector.data.model
 
-import com.ultra.autodetector.data.local.UserEntity
+data class User(
+    val id: String,
+    val email: String,
+    val isAdmin: Boolean = false,
+    val licenseStatus: String = "pending",
+    val expiryDate: Long = 0L,
+    val createdAt: Long = System.currentTimeMillis(),
+    val deviceId: String = "",
+) {
+    fun hasActiveLicense(now: Long = System.currentTimeMillis()): Boolean =
+        isAdmin || (licenseStatus == "approved" && expiryDate > now)
 
-typealias User = UserEntity
+    fun remainingLabel(now: Long = System.currentTimeMillis()): String {
+        if (isAdmin || expiryDate == Long.MAX_VALUE) return "Lifetime access"
+        if (licenseStatus == "pending") return "Awaiting administrator approval"
+        if (licenseStatus == "rejected") return "Access was rejected"
+        val remaining = expiryDate - now
+        if (remaining <= 0L) return "Expired"
+        val days = (remaining / 86_400_000).toInt()
+        val hours = ((remaining % 86_400_000) / 3_600_000).toInt()
+        return "${days}d ${hours}h remaining"
+    }
+}

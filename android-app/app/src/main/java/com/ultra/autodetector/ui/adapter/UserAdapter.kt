@@ -11,11 +11,17 @@ class UserAdapter(
     private val onReject: (User) -> Unit,
     private val onOpen: (User) -> Unit = {},
 ) : RecyclerView.Adapter<UserAdapter.Holder>() {
+
     private var items = emptyList<User>()
 
-    fun submit(value: List<User>) { items = value; notifyDataSetChanged() }
+    fun submit(value: List<User>) { 
+        items = value
+        notifyDataSetChanged() 
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
         Holder(ItemUserRowBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+
     override fun onBindViewHolder(holder: Holder, position: Int) = holder.bind(items[position])
     override fun getItemCount() = items.size
 
@@ -25,9 +31,9 @@ class UserAdapter(
             binding.userStatus.text = user.licenseStatus.uppercase()
             binding.userRemaining.text = user.remainingLabel()
             binding.root.setOnClickListener { onOpen(user) }
-            binding.btnOneDay.setOnClickListener { onGrant(user, 7) }
-            binding.btnTwoDays.setOnClickListener { onGrant(user, 30) }
-            binding.btnThreeDays.setOnClickListener { onGrant(user, 365) }
+            binding.btnOneDay.setOnClickListener { onGrant(user, 1) }
+            binding.btnTwoDays.setOnClickListener { onGrant(user, 2) }
+            binding.btnThreeDays.setOnClickListener { onGrant(user, 3) }
             binding.btnLifetime.setOnClickListener { onGrant(user, 3650) }
             binding.btnReject.setOnClickListener { onReject(user) }
         }

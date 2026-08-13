@@ -9,11 +9,6 @@ import android.os.Build
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 
-/**
- * Centralizes permissions which are required for a reliable user-started
- * background detector. MediaProjection consent is intentionally handled by
- * MainActivity because Android grants it through a user confirmation dialog.
- */
 object BackgroundPermissionHelper {
     data class Status(
         val accessibility: Boolean,
@@ -37,7 +32,7 @@ object BackgroundPermissionHelper {
         ).any { service ->
             val info = service.resolveInfo?.serviceInfo ?: return@any false
             info.packageName == context.packageName &&
-                info.name == "com.ultra.autodetector.service.AutoDetectorService"
+            info.name == "com.ultra.autodetector.service.AutoDetectorService"
         }
     }
 
@@ -46,16 +41,13 @@ object BackgroundPermissionHelper {
 
     fun areNotificationsEnabled(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
+        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
 
     fun accessibilityIntent(): Intent =
         Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
 
     fun overlayIntent(context: Context): Intent =
-        Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:${context.packageName}"),
-        )
-
+        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:${context.packageName}"))
 }

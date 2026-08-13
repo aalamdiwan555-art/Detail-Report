@@ -2,6 +2,7 @@ package com.ultra.autodetector.data.local
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 
@@ -43,7 +44,7 @@ interface UserDao {
     @Query("SELECT COUNT(*) FROM users WHERE createdAt >= :start AND createdAt < :end")
     suspend fun countCreatedBetween(start: Long, end: Long): Int
 
-    @androidx.room.Insert
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(user: UserEntity)
 
     @Update

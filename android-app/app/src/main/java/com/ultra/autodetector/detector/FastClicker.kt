@@ -9,14 +9,16 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 
-/**
- * Dispatches a short accessibility gesture and falls back to a clickable
- * accessibility node when the target app exposes one.
- */
 class FastClicker(
     private val service: AccessibilityService,
     private val handler: Handler,
 ) : AutoCloseable {
+    companion object {
+        private const val TAG = "FastClicker"
+        private const val DOUBLE_TAP_DELAY_MS = 90L
+        private const val GESTURE_DURATION_MS = 50L
+    }
+
     fun doubleClick(x: Float, y: Float): Boolean {
         val startedAt = SystemClock.uptimeMillis()
         val accepted = dispatchTap(
@@ -28,22 +30,14 @@ class FastClicker(
                         x = x,
                         y = y,
                         onCompleted = {
-                            Log.i(
-                                TAG,
-                                "DOUBLE CLICKED at ${x.toInt()},${y.toInt()} in " +
-                                    "${SystemClock.uptimeMillis() - startedAt}ms",
-                            )
+                            Log.i(TAG, "DOUBLE CLICKED at ${x.toInt()},${y.toInt()} in ${SystemClock.uptimeMillis() - startedAt}ms")
                         },
-                        // The first tap already reached the target, so only
-                        // use one node fallback when the second gesture fails.
                         onCancelled = { clickAccessibilityNode(x, y) },
                     )
                     if (!secondAccepted) clickAccessibilityNode(x, y)
                 }
                 handler.postDelayed(secondTap, DOUBLE_TAP_DELAY_MS)
             },
-            // If the first gesture is rejected/cancelled, neither tap reached
-            // the target, so perform both actions through the node fallback.
             onCancelled = { doubleClickAccessibilityNodeAt(x, y) },
         )
         if (!accepted) doubleClickAccessibilityNodeAt(x, y)
@@ -56,14 +50,11 @@ class FastClicker(
         }.getOrDefault(false)
         if (!firstAccepted) return false
 
-        handler.postDelayed(
-            {
-                runCatching {
-                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                }
-            },
-            DOUBLE_TAP_DELAY_MS,
-        )
+        handler.postDelayed({
+            runCatching {
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+        }, DOUBLE_TAP_DELAY_MS)
         return true
     }
 
@@ -75,22 +66,21 @@ class FastClicker(
     ): Boolean {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0L, 1L))
+            .addStroke(GestureDescription.StrokeDescription(path, 0L, GESTURE_DURATION_MS))
             .build()
-        val accepted = service.dispatchGesture(
+
+        return service.dispatchGesture(
             gesture,
             object : AccessibilityService.GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
                     onCompleted()
                 }
-
                 override fun onCancelled(gestureDescription: GestureDescription?) {
                     onCancelled()
                 }
             },
             handler,
         )
-        return accepted
     }
 
     fun doubleClick(rect: Rect): Boolean =
@@ -101,10 +91,9 @@ class FastClicker(
         val node = findClickableNode(root, targetX.toInt(), targetY.toInt()) ?: return false
         val first = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         if (first) {
-            handler.postDelayed(
-                { runCatching { node.performAction(AccessibilityNodeInfo.ACTION_CLICK) } },
-                DOUBLE_TAP_DELAY_MS,
-            )
+            handler.postDelayed({
+                runCatching { node.performAction(AccessibilityNodeInfo.ACTION_CLICK) }
+            }, DOUBLE_TAP_DELAY_MS)
         }
         return first
     }
@@ -133,9 +122,4 @@ class FastClicker(
     }
 
     override fun close() = Unit
-
-    companion object {
-        private const val TAG = "FastClicker"
-        private const val DOUBLE_TAP_DELAY_MS = 90L
-    }
 }

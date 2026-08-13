@@ -12,16 +12,24 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Handler
 import android.util.DisplayMetrics
+import android.util.Log
 import java.nio.ByteBuffer
 
 class ScreenCapture(
     context: Context,
     private val handler: Handler,
 ) {
+    companion object {
+        private const val TAG = "ScreenCapture"
+        private const val CAPTURE_WIDTH = 720
+        private const val MAX_IMAGES = 2
+    }
+
     private val appContext = context.applicationContext
     private var projection: MediaProjection? = null
     private var reader: ImageReader? = null
     private var display: VirtualDisplay? = null
+
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
             handler.post { stop() }
@@ -45,14 +53,17 @@ class ScreenCapture(
     ): Boolean {
         stop()
         val manager = appContext.getSystemService(MediaProjectionManager::class.java)
-        projection = runCatching { manager.getMediaProjection(resultCode, data) }.getOrNull()
-            ?: return false
+        projection = runCatching { 
+            manager.getMediaProjection(resultCode, data) 
+        }.getOrNull() ?: return false
+
         projection?.registerCallback(projectionCallback, handler)
 
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         appContext.getSystemService(android.view.WindowManager::class.java)
             .defaultDisplay.getRealMetrics(metrics)
+
         realScreenWidth = metrics.widthPixels
         realScreenHeight = metrics.heightPixels
         capturedWidth = minOf(CAPTURE_WIDTH, realScreenWidth)
@@ -61,17 +72,20 @@ class ScreenCapture(
             .coerceAtLeast(1)
 
         onBeforeDisplay()
+
         reader = ImageReader.newInstance(
             capturedWidth,
             capturedHeight,
             PixelFormat.RGBA_8888,
-            2,
+            MAX_IMAGES,
         )
+
         reader?.setOnImageAvailableListener({ source ->
             source.acquireLatestImage()?.use { image ->
                 imageToBitmap(image)?.let(onFrame)
             }
         }, handler)
+
         display = projection?.createVirtualDisplay(
             "UltraAutoDetectorCapture",
             capturedWidth,
@@ -86,13 +100,19 @@ class ScreenCapture(
     }
 
     fun stop() {
-        display?.release()
+        try { display?.release() } catch (e: Exception) { Log.w(TAG, "Display release error", e) }
         display = null
-        reader?.setOnImageAvailableListener(null, null)
-        reader?.close()
+
+        try { 
+            reader?.setOnImageAvailableListener(null, null) 
+            reader?.close() 
+        } catch (e: Exception) { Log.w(TAG, "Reader cleanup error", e) }
         reader = null
-        projection?.unregisterCallback(projectionCallback)
-        projection?.stop()
+
+        try { 
+            projection?.unregisterCallback(projectionCallback) 
+            projection?.stop() 
+        } catch (e: Exception) { Log.w(TAG, "Projection stop error", e) }
         projection = null
     }
 
@@ -101,21 +121,26 @@ class ScreenCapture(
         val pixelStride = plane.pixelStride
         val rowStride = plane.rowStride
         if (pixelStride <= 0 || rowStride <= 0) return null
+
         val rowPadding = (rowStride - pixelStride * image.width).coerceAtLeast(0)
         val paddedWidth = image.width + rowPadding / pixelStride
+
         val bitmap = Bitmap.createBitmap(paddedWidth, image.height, Bitmap.Config.ARGB_8888)
         val buffer: ByteBuffer = plane.buffer
         buffer.rewind()
-        bitmap.copyPixelsFromBuffer(buffer)
-        return if (paddedWidth == image.width) {
-            bitmap
-        } else {
-            Bitmap.createBitmap(bitmap, 0, 0, image.width, image.height)
-                .also { bitmap.recycle() }
-        }
-    }
 
-    companion object {
-        private const val CAPTURE_WIDTH = 720
+        return try {
+            bitmap.copyPixelsFromBuffer(buffer)
+            if (paddedWidth == image.width) {
+                bitmap
+            } else {
+                Bitmap.createBitmap(bitmap, 0, 0, image.width, image.height)
+                    .also { bitmap.recycle() }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Buffer copy failed", e)
+            bitmap.recycle()
+            null
+        }
     }
 }

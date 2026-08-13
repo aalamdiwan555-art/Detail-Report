@@ -6,6 +6,7 @@ import com.ultra.autodetector.data.local.UserEntity
 import com.ultra.autodetector.data.model.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 class UserRepository(context: Context) {
     private val dao = AppDatabase.getInstance(context.applicationContext).userDao()
@@ -20,15 +21,16 @@ class UserRepository(context: Context) {
                     !it.isAdmin && it.expiryDate <= System.currentTimeMillis()
                 }
                 else -> result
-            }
+            }.map { it.toUserModel() }
         }
 
     suspend fun stats(): Stats = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
         Stats(
             total = dao.count(),
-            active = dao.countActive(),
+            active = dao.countActive(now),
             pending = dao.countPending(),
-            expired = dao.countExpired(),
+            expired = dao.countExpired(now),
         )
     }
 
@@ -43,34 +45,37 @@ class UserRepository(context: Context) {
     suspend fun approve(id: String, days: Int) = withContext(Dispatchers.IO) {
         val user = dao.getById(id) ?: error("User not found.")
         val now = System.currentTimeMillis()
-        val base = if (user.expiryDate in (now + 1)..<Long.MAX_VALUE) {
-            user.expiryDate
-        } else {
-            now
-        }
-        check(dao.extendExpiry(id, base + days * DAY_MILLIS) == 1) {
-            "Unable to update user license."
-        }
-    }
-
-    suspend fun setExpiry(id: String, expiryDate: Long) = withContext(Dispatchers.IO) {
-        val user = dao.getById(id) ?: error("User not found.")
-        check(dao.extendExpiry(id, expiryDate) == 1) { "Unable to update user expiry." }
+        val base = if (user.expiryDate in (now + 1)..Long.MAX_VALUE) user.expiryDate else now
+        val expiry = if (days >= 3650) Long.MAX_VALUE else base + TimeUnit.DAYS.toMillis(days.toLong())
+        dao.updateStatus(id, UserEntity.STATUS_APPROVED, expiry)
     }
 
     suspend fun reject(id: String) = withContext(Dispatchers.IO) {
         val user = dao.getById(id) ?: error("User not found.")
-        check(dao.updateStatus(id, UserEntity.STATUS_REJECTED) == 1) {
-            "Unable to reject user."
-        }
+        require(!user.isAdmin) { "Cannot reject administrator." }
+        dao.updateStatus(id, UserEntity.STATUS_REJECTED, 0L)
     }
 
-    suspend fun delete(id: String) = withContext(Dispatchers.IO) { dao.deleteById(id) }
-    suspend fun clearPending() = withContext(Dispatchers.IO) { dao.deletePending() }
+    suspend fun clearPending() = withContext(Dispatchers.IO) {
+        dao.deletePending()
+    }
 
-    data class Stats(val total: Int, val active: Int, val pending: Int, val expired: Int)
+    data class Stats(
+        val total: Int,
+        val active: Int,
+        val pending: Int,
+        val expired: Int,
+    )
 
-    companion object {
-        private const val DAY_MILLIS = 86_400_000L
+    private fun UserEntity.toUserModel(): User {
+        return User(
+            id = id,
+            email = email,
+            isAdmin = isAdmin,
+            licenseStatus = licenseStatus,
+            expiryDate = expiryDate,
+            createdAt = createdAt,
+            deviceId = deviceId
+        )
     }
 }

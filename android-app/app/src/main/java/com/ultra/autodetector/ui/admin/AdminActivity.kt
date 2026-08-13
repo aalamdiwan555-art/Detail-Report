@@ -1,19 +1,19 @@
 package com.ultra.autodetector.ui.admin
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.ultra.autodetector.data.local.UserEntity
 import com.ultra.autodetector.data.model.User
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.data.repository.UserRepository
 import com.ultra.autodetector.databinding.ActivityAdminBinding
 import com.ultra.autodetector.ui.adapter.UserAdapter
+import com.ultra.autodetector.ui.auth.AuthActivity
 import kotlinx.coroutines.launch
 
-/** Approval-only administrator screen. Built-in templates never enter this UI. */
 class AdminActivity : AppCompatActivity() {
     private lateinit var binding: ActivityAdminBinding
     private lateinit var auth: AuthRepository
@@ -28,17 +28,24 @@ class AdminActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityAdminBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
         auth = AuthRepository(this)
         users = UserRepository(this)
+
         binding.usersList.layoutManager = LinearLayoutManager(this)
         binding.usersList.adapter = userAdapter
         binding.btnBack.setOnClickListener { finish() }
+
         binding.btnLogoutAdmin.setOnClickListener {
             lifecycleScope.launch {
                 auth.logout()
+                startActivity(Intent(this@AdminActivity, AuthActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                })
                 finish()
             }
         }
+
         binding.btnClearPending.setOnClickListener {
             MaterialAlertDialogBuilder(this)
                 .setTitle("Clear pending accounts?")
@@ -52,10 +59,17 @@ class AdminActivity : AppCompatActivity() {
                 }
                 .show()
         }
+
         binding.userSearch.addTextChangedListener(SimpleTextWatcher { refreshUsers() })
+
         lifecycleScope.launch {
             val current = auth.currentUser()
-            if (current?.isAdmin != true) finish() else refreshUsers()
+            if (current?.isAdmin != true) {
+                startActivity(Intent(this@AdminActivity, AuthActivity::class.java))
+                finish()
+            } else {
+                refreshUsers()
+            }
         }
     }
 
@@ -99,8 +113,7 @@ class AdminActivity : AppCompatActivity() {
             .show()
     }
 
-    private class SimpleTextWatcher(private val onChanged: () -> Unit) :
-        android.text.TextWatcher {
+    private class SimpleTextWatcher(private val onChanged: () -> Unit) : android.text.TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = onChanged()
         override fun afterTextChanged(s: android.text.Editable?) = Unit

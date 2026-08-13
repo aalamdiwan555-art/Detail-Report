@@ -13,6 +13,7 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
+import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.work.OneTimeWorkRequestBuilder
@@ -34,11 +35,24 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import java.util.concurrent.TimeUnit
 
-/**
- * The only detector service. It is an AccessibilityService so click dispatch
- * stays inside Android's supported gesture API.
- */
 class AutoDetectorService : AccessibilityService() {
+    companion object {
+        private const val TAG = "AutoDetectorService"
+        private const val NOTIFICATION_ID = 101
+        private const val SCAN_INTERVAL_MS = 180L
+        private const val CLICK_COOLDOWN_MS = 800L
+        private val SCALES = doubleArrayOf(0.75, 0.90, 1.0, 1.10)
+        const val ACTION_START = "com.ultra.autodetector.action.START"
+        const val ACTION_STOP = "com.ultra.autodetector.action.STOP"
+        const val ACTION_RESTART = "com.ultra.autodetector.action.RESTART"
+        const val EXTRA_RESULT_CODE = "result_code"
+        const val EXTRA_RESULT_DATA = "result_data"
+
+        @Volatile
+        var isRunning = false
+            private set
+    }
+
     private lateinit var templates: BuiltInTemplateManager
     private lateinit var capture: ScreenCapture
     private lateinit var clicker: FastClicker
@@ -211,8 +225,8 @@ class AutoDetectorService : AccessibilityService() {
                     Log.i(
                         TAG,
                         "FOUND ${found.template.name} at ${x.roundToInt()},${y.roundToInt()} " +
-                            "Confidence: ${"%.2f".format(found.confidence)} in " +
-                            "${SystemClock.uptimeMillis() - startedAt}ms -> CLICKED",
+                        "Confidence: ${"%.2f".format(found.confidence)} in " +
+                        "${SystemClock.uptimeMillis() - startedAt}ms -> CLICKED",
                     )
                 }
             }
@@ -245,7 +259,7 @@ class AutoDetectorService : AccessibilityService() {
         )
     }
 
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (isRunning) return
         if (!::templates.isInitialized) return
         val root = rootInActiveWindow ?: return
@@ -328,21 +342,6 @@ class AutoDetectorService : AccessibilityService() {
         val width: Int,
         val height: Int,
     )
-
-    companion object {
-        private const val TAG = "AutoDetectorService"
-        private const val NOTIFICATION_ID = 101
-        private const val SCAN_INTERVAL_MS = 180L
-        private const val CLICK_COOLDOWN_MS = 800L
-        private val SCALES = doubleArrayOf(0.75, 0.90, 1.0, 1.10)
-        const val ACTION_START = "com.ultra.autodetector.action.START"
-        const val ACTION_STOP = "com.ultra.autodetector.action.STOP"
-        const val ACTION_RESTART = "com.ultra.autodetector.action.RESTART"
-        const val EXTRA_RESULT_CODE = "result_code"
-        const val EXTRA_RESULT_DATA = "result_data"
-        @Volatile var isRunning = false
-            private set
-    }
 }
 
 class AutoDetectorRestartWorker(
@@ -357,6 +356,7 @@ class AutoDetectorRestartWorker(
     }
 }
 
+@Suppress("DEPRECATION")
 private inline fun <reified T : android.os.Parcelable> Intent.parcelableExtra(key: String): T? =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) getParcelableExtra(key, T::class.java)
-    else @Suppress("DEPRECATION") getParcelableExtra(key)
+    else getParcelableExtra(key)

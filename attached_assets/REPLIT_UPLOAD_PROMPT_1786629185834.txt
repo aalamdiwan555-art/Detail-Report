@@ -1,0 +1,92 @@
+
+You are an expert DevOps Automation Engineer. Your task is to:
+
+1. DOWNLOAD the ZIP file from: /mnt/agents/output/Detail-Report-Fixed.zip
+   (This contains a fully fixed Android app project)
+
+2. EXTRACT the ZIP to get all fixed source files
+
+3. CLONE the GitHub repository: https://github.com/aalamdiwan555-art/Detail-Report.git
+   (Use token: [REDACTED_GITHUB_TOKEN])
+
+4. REPLACE all old buggy files with the new fixed files from the ZIP
+
+5. COMMIT all changes with message: "FIXED v2.0.0 - All bugs resolved"
+
+6. PUSH to GitHub main branch
+
+## FILES TO REPLACE (from ZIP):
+
+### Kotlin Source Files (23 files):
+- android-app/app/src/main/java/com/ultra/autodetector/UltraAutoDetectorApp.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/local/AppDatabase.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/local/EncryptedPrefsManager.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/local/NoticeDao.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/local/NoticeEntity.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/local/UserDao.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/local/UserEntity.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/model/User.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/repository/AdminConfig.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/repository/AuthRepository.kt
+- android-app/app/src/main/java/com/ultra/autodetector/data/repository/UserRepository.kt
+- android-app/app/src/main/java/com/ultra/autodetector/detector/BuiltInTemplateManager.kt
+- android-app/app/src/main/java/com/ultra/autodetector/detector/FastClicker.kt
+- android-app/app/src/main/java/com/ultra/autodetector/detector/ScreenCapture.kt
+- android-app/app/src/main/java/com/ultra/autodetector/service/AutoDetectorService.kt
+- android-app/app/src/main/java/com/ultra/autodetector/service/FloatingOverlayService.kt
+- android-app/app/src/main/java/com/ultra/autodetector/ui/adapter/UserAdapter.kt
+- android-app/app/src/main/java/com/ultra/autodetector/ui/admin/AdminActivity.kt
+- android-app/app/src/main/java/com/ultra/autodetector/ui/auth/AuthActivity.kt
+- android-app/app/src/main/java/com/ultra/autodetector/ui/main/MainActivity.kt
+- android-app/app/src/main/java/com/ultra/autodetector/util/BackgroundPermissionHelper.kt
+- android-app/app/src/main/java/com/ultra/autodetector/util/Constants.kt
+- android-app/app/src/main/java/com/ultra/autodetector/util/Extensions.kt
+
+### Build & Config Files (8 files):
+- android-app/app/build.gradle.kts
+- android-app/app/src/main/AndroidManifest.xml
+- android-app/app/src/main/res/values/strings.xml
+- android-app/app/src/main/res/values/colors.xml
+- android-app/app/src/main/res/values/themes.xml
+- android-app/app/src/main/res/xml/accessibility_service_config.xml
+- android-app/app/src/main/res/drawable/bg_pulse_green.xml
+- android-app/app/src/main/res/drawable/bg_status_red.xml
+
+## BUGS FIXED IN THESE FILES:
+1. Signup creates user but login fails → Fixed atomic session save
+2. App crashes after login → Fixed debounced navigation with CLEAR_TASK
+3. Session not saved → Fixed 3-layer storage (Encrypted+Fallback+Auth)
+4. Logout not clearing → Fixed atomic clear with verification
+5. Black screen crash → Added null checks on all views
+6. Memory leaks → Fixed Bitmap/Mat recycling
+7. Detection not working → Fixed gesture duration 1ms→50ms
+8. Security vulnerability → Added constant-time password comparison
+
+## STEPS TO EXECUTE:
+
+```bash
+# Step 1: Download and extract ZIP
+cd /tmp
+unzip /mnt/agents/output/Detail-Report-Fixed.zip -d fixed_project
+
+# Step 2: Clone original repo with token
+cd /tmp
+git clone https://[REDACTED_GITHUB_TOKEN]@github.com/aalamdiwan555-art/Detail-Report.git
+
+# Step 3: Copy all fixed files
+cd Detail-Report
+rsync -av --delete /tmp/fixed_project/Detail-Report-Fixed/ .
+
+# Step 4: Configure git
+git config user.email "fix@ultra-autodetector.com"
+git config user.name "Auto Fix Bot"
+
+# Step 5: Add, commit, push
+git add -A
+git commit -m "FIXED v2.0.0 - All 31 files updated - Auth, Session, Memory, Detection, Security bugs resolved"
+git push origin main --force
+```
+
+## VERIFICATION:
+After push, verify at: https://github.com/aalamdiwan555-art/Detail-Report
+All 31 files should show recent commit timestamp.
