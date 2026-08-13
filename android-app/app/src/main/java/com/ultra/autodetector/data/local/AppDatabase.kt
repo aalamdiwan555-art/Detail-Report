@@ -52,5 +52,5 @@ abstract class AppDatabase : RoomDatabase() {
                     ).fallbackToDestructiveMigration().build()
                 }.getOrElse { throw firstFailure }
             }
-    }
+        }
     }
