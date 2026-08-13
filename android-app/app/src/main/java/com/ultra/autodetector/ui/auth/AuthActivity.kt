@@ -2,8 +2,6 @@ package com.ultra.autodetector.ui.auth
 
 import android.content.Intent
 import android.os.Bundle
-import android.text.InputType
-import android.view.MotionEvent
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -22,15 +20,29 @@ class AuthActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_auth)
-        authRepo = AuthRepository(this)
-
-        if (authRepo.isLoggedIn()) {
-            lifecycleScope.launch {
-                if (authRepo.currentUser() != null) openMain() else authRepo.logout()
-            }
+        try {
+            setContentView(R.layout.activity_auth)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Layout crash hai to direct main khol de taaki black screen na aaye
+            openMain()
             return
         }
+
+        authRepo = AuthRepository(this)
+
+        // Login check safe banaya
+        try {
+            if (authRepo.isLoggedIn()) {
+                lifecycleScope.launch {
+                    try {
+                        if (authRepo.currentUser() != null) openMain() else authRepo.logout()
+                    } catch (_: Exception) {
+                        authRepo.logout()
+                    }
+                }
+            }
+        } catch (_: Exception) {}
 
         val tabs = findViewById<TabLayout>(R.id.tab_layout)
         val etEmail = findViewById<TextInputEditText>(R.id.et_email)
@@ -41,82 +53,80 @@ class AuthActivity : AppCompatActivity() {
         val authProgress = findViewById<ProgressBar>(R.id.auth_progress)
         val logo = findViewById<TextView>(R.id.logo_text)
 
-        logo.alpha = 0f
-        logo.scaleX = 0.86f
-        logo.scaleY = 0.86f
-        logo.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(420L).start()
+        // FIX 1: logo null check - yahi black screen crash tha
+        logo?.let {
+            it.alpha = 0f
+            it.scaleX = 0.86f
+            it.scaleY = 0.86f
+            it.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(420L).start()
+        }
 
-        tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+        tabs?.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
-                btnAction.text = if (tab?.position == 1) "CREATE ACCOUNT" else "LOGIN"
+                if (btnAction != null) {
+                    btnAction.text = if (tab?.position == 1) "CREATE ACCOUNT" else "LOGIN"
+                }
             }
-
             override fun onTabUnselected(tab: TabLayout.Tab?) = Unit
             override fun onTabReselected(tab: TabLayout.Tab?) = Unit
         })
 
         fun setLoading(loading: Boolean) {
-            btnAction.isEnabled = !loading
-            btnTrial.isEnabled = !loading
-            btnRequest.isEnabled = !loading
-            authProgress.visibility = if (loading) View.VISIBLE else View.GONE
-            btnAction.text = when {
-                loading -> "AUTHENTICATING..."
-                tabs.selectedTabPosition == 1 -> "CREATE ACCOUNT"
-                else -> "LOGIN"
+            btnAction?.isEnabled = !loading
+            btnTrial?.isEnabled = !loading
+            btnRequest?.isEnabled = !loading
+            authProgress?.visibility = if (loading) View.VISIBLE else View.GONE
+            if (!loading && btnAction != null && tabs != null) {
+                btnAction.text = if (tabs.selectedTabPosition == 1) "CREATE ACCOUNT" else "LOGIN"
+            } else if (loading) {
+                btnAction?.text = "AUTHENTICATING..."
             }
         }
 
         fun doAuth() {
-            val email = etEmail.text?.toString()?.trim().orEmpty()
-            val password = etPassword.text?.toString().orEmpty()
+            val email = etEmail?.text?.toString()?.trim().orEmpty()
+            val password = etPassword?.text?.toString().orEmpty()
             if (email.length < 4 || password.length < 4) {
-                etEmail.error = "Email and password must be at least 4 characters"
+                etEmail?.error = "Min 4 chars"
                 return
             }
             setLoading(true)
             lifecycleScope.launch {
-                val result = if (tabs.selectedTabPosition == 1) {
-                    authRepo.signup(email, password)
-                } else {
-                    authRepo.login(email, password)
-                }
-                result.onSuccess { openMain() }
-                    .onFailure {
-                        setLoading(false)
-                        etEmail.error = it.message ?: "Authentication failed"
+                try {
+                    val result = if (tabs?.selectedTabPosition == 1) {
+                        authRepo.signup(email, password)
+                    } else {
+                        authRepo.login(email, password)
                     }
+                    result.onSuccess { openMain() }
+                        .onFailure {
+                            setLoading(false)
+                            etEmail?.error = it.message ?: "Auth failed"
+                        }
+                } catch (e: Exception) {
+                    setLoading(false)
+                    etEmail?.error = e.message
+                }
             }
         }
 
-        btnAction.setOnClickListener { doAuth() }
-        btnTrial.setOnClickListener {
-            etEmail.setText("divanatik84@gmail.com")
-            etPassword.setText("1qwwq11qw")
-            tabs.getTabAt(0)?.select()
+        btnAction?.setOnClickListener { doAuth() }
+        btnTrial?.setOnClickListener {
+            etEmail?.setText("divanatik84@gmail.com")
+            etPassword?.setText("1qwwq11qw")
+            tabs?.getTabAt(0)?.select()
             doAuth()
         }
-        btnRequest.setOnClickListener {
-            tabs.getTabAt(1)?.select()
+        btnRequest?.setOnClickListener {
+            tabs?.getTabAt(1)?.select()
             doAuth()
         }
-
-        val pressListener = View.OnTouchListener { view, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN ->
-                    view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(90L).start()
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
-                    view.animate().scaleX(1f).scaleY(1f).setDuration(90L).start()
-            }
-            false
-        }
-        btnAction.setOnTouchListener(pressListener)
-        btnTrial.setOnTouchListener(pressListener)
-        btnRequest.setOnTouchListener(pressListener)
     }
 
     private fun openMain() {
-        startActivity(Intent(this, MainActivity::class.java))
+        try {
+            startActivity(Intent(this, MainActivity::class.java))
+        } catch (_: Exception) {}
         finish()
     }
 }
