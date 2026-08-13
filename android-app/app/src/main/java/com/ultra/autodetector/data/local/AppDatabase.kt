@@ -53,4 +53,4 @@ abstract class AppDatabase : RoomDatabase() {
                 }.getOrElse { throw firstFailure }
             }
     }
-}
+    }
