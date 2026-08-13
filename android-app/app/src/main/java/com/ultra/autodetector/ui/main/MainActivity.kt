@@ -87,7 +87,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupUi() {
         binding.btnStartDetection.setOnClickListener { requestPermissionsAndStart() }
         binding.btnStopDetection.setOnClickListener { stopDetector() }
-        LogoTapAccessGesture.attach(binding.logoAccessTarget) { showAdminAccessDialog() }
+        LogoTapAccessGesture.attach(binding.logoAccessTarget) { openAdminPanel() }
         binding.btnLogout.setOnClickListener {
             lifecycleScope.launch {
                 auth.logout()
@@ -314,41 +314,23 @@ class MainActivity : AppCompatActivity() {
         binding.btnStopDetection.alpha = if (running) 1f else 0.55f
     }
 
-    private fun showAdminAccessDialog() {
-        val content = layoutInflater.inflate(R.layout.dialog_admin_access, null)
-        val password = content.findViewById<android.widget.EditText>(R.id.admin_password)
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setView(content)
-            .setNegativeButton("CANCEL", null)
-            .setPositiveButton("OPEN ADMIN", null)
-            .create()
-
-        dialog.setOnShowListener {
-            dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
-                val enteredPassword = password.text?.toString().orEmpty()
-                if (enteredPassword.isBlank()) {
-                    password.error = "Enter administrator password"
-                    return@setOnClickListener
+    private fun openAdminPanel() {
+        lifecycleScope.launch {
+            auth.loginAdmin()
+                .onSuccess {
+                    startActivity(Intent(this@MainActivity, AdminActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    })
+                    finish()
                 }
-
-                it.isEnabled = false
-                lifecycleScope.launch {
-                    auth.loginAdmin(enteredPassword)
-                        .onSuccess {
-                            dialog.dismiss()
-                            startActivity(Intent(this@MainActivity, AdminActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                            })
-                            finish()
-                        }
-                        .onFailure { error ->
-                            it.isEnabled = true
-                            password.error = error.message ?: "Administrator authentication failed"
-                        }
+                .onFailure { error ->
+                    MaterialAlertDialogBuilder(this@MainActivity)
+                        .setTitle("Administrator access failed")
+                        .setMessage(error.message ?: "Unable to open administrator panel.")
+                        .setPositiveButton("OK", null)
+                        .show()
                 }
-            }
         }
-        dialog.show()
     }
 
     private fun requestPermissionsAndStart() {

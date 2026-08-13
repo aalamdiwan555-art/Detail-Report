@@ -56,8 +56,9 @@ The app currently uses local database mode:
 ## Architecture decisions
 
 - Visible login and sign-up create and authenticate regular user accounts only.
-  Administrator access is intentionally separate: tap the `ULTRA` logo six
-  times, then enter the configured build-time administrator password.
+  Administrator access is intentionally separate: tap the `ULTRA` logo ten
+  times. This local passwordless mode is not suitable for production or shared
+  devices.
 - Local database mode keeps the UI usable without cloud credentials.
 - On a user's first authenticated visit, a full-screen onboarding gate requires
   accessibility, overlay, and notification permissions before detector controls
@@ -76,7 +77,7 @@ The app currently uses local database mode:
 
 Users can sign in or create a pending account, complete one-time device
 permission setup, review license status, and start/stop screen detection.
-  Trusted administrators enter through the six-tap logo gesture and can
+  Trusted administrators enter through the ten-tap logo gesture and can
 approve/reject users; built-in template assets are not managed at runtime.
 
 ## User preferences

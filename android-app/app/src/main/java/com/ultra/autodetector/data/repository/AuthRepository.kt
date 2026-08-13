@@ -178,22 +178,17 @@ class AuthRepository(context: Context) {
     }
 
     /**
-     * Administrator authentication is deliberately kept off the normal login
-     * and sign-up paths. The UI reaches this method only after the six-tap
-     * gesture on the ULTRA logo.
+     * The UI reaches this local administrator session method only after the
+     * ten-tap gesture on the ULTRA logo.
      */
-    suspend fun loginAdmin(password: String): Result<User> = runCatching {
-        require(AdminConfig.matchesPassword(password)) {
-            "Administrator password is invalid or not configured in this APK."
-        }
-
+    suspend fun loginAdmin(): Result<User> = runCatching {
         withContext(Dispatchers.IO) {
             val existing = userDao.getById(ADMIN_ID)
             val account = if (existing == null) {
                 UserEntity(
                     id = ADMIN_ID,
                     email = ADMIN_ACCOUNT_EMAIL,
-                    passwordHash = AdminConfig.hashPass(password),
+                    passwordHash = "",
                     isAdmin = true,
                     licenseStatus = UserEntity.STATUS_APPROVED,
                     expiryDate = Long.MAX_VALUE,
@@ -201,9 +196,9 @@ class AuthRepository(context: Context) {
                 ).also { userDao.insert(it) }
             } else {
                 // Keep the local administrator record aligned with the
-                // configured password on every successful admin login.
+                // passwordless local administrator session.
                 existing.copy(
-                    passwordHash = AdminConfig.hashPass(password),
+                    passwordHash = "",
                     isAdmin = true,
                     licenseStatus = UserEntity.STATUS_APPROVED,
                     expiryDate = Long.MAX_VALUE,

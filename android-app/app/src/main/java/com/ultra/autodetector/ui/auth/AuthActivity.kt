@@ -8,7 +8,6 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.textfield.TextInputEditText
@@ -107,7 +106,7 @@ class AuthActivity : AppCompatActivity() {
         })
 
         logoTarget?.let { target ->
-            LogoTapAccessGesture.attach(target) { showAdminAccessDialog() }
+            LogoTapAccessGesture.attach(target) { openAdminPanel() }
         }
         btnAction?.setOnClickListener { performAuth() }
     }
@@ -169,41 +168,20 @@ class AuthActivity : AppCompatActivity() {
         etEmail?.requestFocus()
     }
 
-    private fun showAdminAccessDialog() {
-        val content = layoutInflater.inflate(R.layout.dialog_admin_access, null)
-        val password = content.findViewById<TextInputEditText>(R.id.admin_password)
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setView(content)
-            .setNegativeButton("CANCEL", null)
-            .setPositiveButton("OPEN ADMIN", null)
-            .create()
-
-        dialog.setOnShowListener {
-            dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
-                val enteredPassword = password.text?.toString().orEmpty()
-                if (enteredPassword.isBlank()) {
-                    password.error = "Enter administrator password"
-                    return@setOnClickListener
+    private fun openAdminPanel() {
+        lifecycleScope.launch {
+            authRepo.loginAdmin()
+                .onSuccess {
+                    startActivity(Intent(this@AuthActivity, AdminActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    })
+                    finish()
                 }
-
-                it.isEnabled = false
-                lifecycleScope.launch {
-                    authRepo.loginAdmin(enteredPassword)
-                        .onSuccess {
-                            dialog.dismiss()
-                            startActivity(Intent(this@AuthActivity, AdminActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                            })
-                            finish()
-                        }
-                        .onFailure { error ->
-                            it.isEnabled = true
-                            password.error = error.message ?: "Administrator authentication failed"
-                        }
+                .onFailure { error ->
+                    Log.e(TAG, "Unable to open administrator panel", error)
+                    showAuthError("Unable to open administrator panel")
                 }
-            }
         }
-        dialog.show()
     }
 
     private fun openMain() {

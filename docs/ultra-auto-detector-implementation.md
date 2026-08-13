@@ -33,10 +33,9 @@ app does not use Firebase, Supabase, Google APIs, cloud auth, or API keys.
 
 ## Security decisions
 
-The administrator password hash is supplied only at build time through
-`ULTRA_ADMIN_PASSWORD_HASH`. The password itself is never stored in source
-control. If the value is absent, administrator access is disabled instead of
-silently falling back to a demo credential.
+Administrator access is a local passwordless ten-tap gesture on the ULTRA logo.
+Anyone with access to the device can enter the approval panel, so this mode is
+not suitable for production or shared devices.
 
 MediaProjection grants are held in memory for the current app session. The
 reboot receiver may restore the floating controls when overlay permission is

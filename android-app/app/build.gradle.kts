@@ -4,13 +4,6 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
-val configuredAdminPasswordHash = providers.gradleProperty("ultraAdminPasswordHash")
-    .orElse(providers.environmentVariable("ULTRA_ADMIN_PASSWORD_HASH"))
-    .orElse("")
-
-fun quoteBuildConfig(value: String): String =
-    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
-
 android {
     namespace = "com.ultra.autodetector"
     compileSdk = 35
@@ -21,7 +14,6 @@ android {
         targetSdk = 34
         versionCode = 2
         versionName = "2.0.0-fixed"
-        buildConfigField("String", "ULTRA_ADMIN_PASSWORD_HASH", quoteBuildConfig(configuredAdminPasswordHash.get()))
     }
 
     buildTypes {

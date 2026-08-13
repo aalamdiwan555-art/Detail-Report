@@ -6,12 +6,12 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 
 /**
- * Keeps administrator entry out of the normal auth surface while providing
- * a deliberate six-tap gesture on the visible ULTRA logo.
+ * Provides a deliberate ten-tap local administrator entry gesture on the
+ * visible ULTRA logo.
  */
 object LogoTapAccessGesture {
-    private const val REQUIRED_TAPS = 6
-    private const val TAP_SEQUENCE_TIMEOUT_MS = 3_500L
+    private const val REQUIRED_TAPS = 10
+    private const val TAP_SEQUENCE_TIMEOUT_MS = 6_000L
 
     fun attach(target: View, onTriggered: () -> Unit) {
         val handler = Handler(Looper.getMainLooper())
