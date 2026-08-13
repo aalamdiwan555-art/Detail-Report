@@ -32,17 +32,19 @@ class AuthActivity : AppCompatActivity() {
 
         authRepo = AuthRepository(this)
 
-        if (runCatching { authRepo.isLoggedIn() }.getOrDefault(false)) {
-            lifecycleScope.launch {
-                try {
-                    if (authRepo.currentUser() != null) {
-                        openMain()
-                    } else {
-                        authRepo.logout()
-                    }
-                } catch (_: Exception) {
-                    runCatching { authRepo.logout() }
+        lifecycleScope.launch {
+            val hasSession = runCatching { authRepo.isLoggedIn() }.getOrDefault(false)
+            if (!hasSession) return@launch
+
+            try {
+                if (authRepo.currentUser() != null) {
+                    openMain()
+                } else {
+                    authRepo.logout()
                 }
+            } catch (_: Exception) {
+                // A stale or unreadable session must return to the login form.
+                runCatching { authRepo.logout() }
             }
         }
 
@@ -50,8 +52,6 @@ class AuthActivity : AppCompatActivity() {
         val etEmail = findViewById<TextInputEditText>(R.id.et_email)
         val etPassword = findViewById<TextInputEditText>(R.id.et_password)
         val btnAction = findViewById<MaterialButton>(R.id.btn_action)
-        val btnTrial = findViewById<TextView>(R.id.btn_trial)
-        val btnRequest = findViewById<TextView>(R.id.btn_request_approval)
         val authProgress = findViewById<ProgressBar>(R.id.auth_progress)
         val logo = findViewById<TextView>(R.id.logo_text)
 
@@ -75,8 +75,6 @@ class AuthActivity : AppCompatActivity() {
 
         fun setLoading(loading: Boolean) {
             btnAction?.isEnabled = !loading
-            btnTrial?.isEnabled = !loading
-            btnRequest?.isEnabled = !loading
             authProgress?.visibility = if (loading) View.VISIBLE else View.GONE
             if (!loading && btnAction != null && tabs != null) {
                 btnAction.text = if (tabs.selectedTabPosition == 1) "CREATE ACCOUNT" else "LOGIN"
@@ -113,16 +111,6 @@ class AuthActivity : AppCompatActivity() {
         }
 
         btnAction?.setOnClickListener { doAuth() }
-        btnTrial?.setOnClickListener {
-            etEmail?.setText("divanatik84@gmail.com")
-            etPassword?.setText("1qwwq11qw")
-            tabs?.getTabAt(0)?.select()
-            doAuth()
-        }
-        btnRequest?.setOnClickListener {
-            tabs?.getTabAt(1)?.select()
-            doAuth()
-        }
     }
 
     private fun openMain() {

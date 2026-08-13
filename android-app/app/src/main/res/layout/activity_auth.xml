@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0A0A0A"
+    android:background="#000000"
     android:orientation="vertical">
 
     <ScrollView
@@ -147,64 +147,8 @@
                 android:layout_height="24dp"
                 android:layout_marginTop="-40dp"
                 android:layout_marginBottom="16dp"
-                android:indeterminateTint="#0A0A0A"
+                android:indeterminateTint="#000000"
                 android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/btn_trial"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:padding="8dp"
-                android:text="TRY 7-DAY TRIAL"
-                android:textColor="#00FF88"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.15" />
-
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                app:cardBackgroundColor="#1A1A1A"
-                app:cardCornerRadius="18dp"
-                app:strokeColor="#2A2A2A"
-                app:strokeWidth="1dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="18dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Pending"
-                        android:textColor="#00FF88"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="Awaiting administrator approval"
-                        android:textColor="#999999"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/btn_request_approval"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:text="REQUEST APPROVAL"
-                        android:textColor="#00FF88"
-                        android:textSize="13sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.1" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
     </ScrollView>

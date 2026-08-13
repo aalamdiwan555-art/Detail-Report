@@ -26,11 +26,10 @@ New accounts are pending until an administrator approves them. Passwords are
 stored as salted SHA-256 hashes in the local Room database and the current
 session is stored in Android `EncryptedSharedPreferences`.
 
-Administrator authorization accepts the configured build-time email/hash and
-retains the local administrator fallback configured in `AdminConfig.kt` for
-offline operation. Administrators approve users; they cannot upload or delete
-templates. Before release, replace local credentials with a trusted server-side
-or managed provisioning path.
+Administrator authorization accepts only the configured build-time email/hash.
+Administrators approve users; they cannot upload or delete templates. Before
+release, replace local credentials with a trusted server-side or managed
+provisioning path.
 
 ## Build
 

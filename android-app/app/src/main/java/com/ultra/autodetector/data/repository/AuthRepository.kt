@@ -68,7 +68,7 @@ class AuthRepository(context: Context) {
                 passwordHash = AdminConfig.hashPass(password),
                 isAdmin = false,
                 licenseStatus = UserEntity.STATUS_PENDING,
-                expiryDate = System.currentTimeMillis() + TRIAL_MILLIS,
+                expiryDate = 0L,
                 deviceId = deviceId(),
             )
             users.insert(user)
@@ -179,6 +179,5 @@ class AuthRepository(context: Context) {
 
     companion object {
         private const val ADMIN_ID = "local-admin"
-        private const val TRIAL_MILLIS = 7L * 24L * 60L * 1000L
     }
 }
