@@ -1,7 +1,5 @@
 package com.ultra.autodetector.service
 
-import android.app.Notification
-import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.Canvas
@@ -16,10 +14,9 @@ import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import android.content.pm.ServiceInfo
-import com.ultra.autodetector.R
 import com.ultra.autodetector.UltraAutoDetectorApp
 
-class FloatingOverlayService : Service() {
+class FloatingOverlayService : android.app.Service() {
     private lateinit var windowManager: WindowManager
     private var overlay: DetectionOverlay? = null
 
@@ -87,31 +84,4 @@ class FloatingOverlayService : Service() {
             style = Paint.Style.STROKE
             strokeWidth = 5f
         }
-        private var rectangle: Rect? = null
-        private val hideRunnable = Runnable {
-            rectangle = null
-            invalidate()
-        }
-
-        fun show(value: Rect) {
-            rectangle = value
-            removeCallbacks(hideRunnable)
-            postDelayed(hideRunnable, 700L)
-            invalidate()
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            rectangle?.let(canvas::drawRect)
-        }
-    }
-
-    companion object {
-        const val ACTION_RESULT = "com.ultra.autodetector.action.OVERLAY_RESULT"
-        const val ACTION_STOP = "com.ultra.autodetector.action.OVERLAY_STOP"
-        const val EXTRA_LEFT = "left"
-        const val EXTRA_TOP = "top"
-        const val EXTRA_WIDTH = "width"
-        const val EXTRA_HEIGHT = "height"
-    }
-}
+        private var rectangle: Rect?
