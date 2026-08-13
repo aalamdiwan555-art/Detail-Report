@@ -7,3 +7,31 @@ uri = "file://docs/ultra-auto-detector-blueprint-report.md"
 type = "text"
 title = "Ultra AutoDetector Blueprint Report"
 description = "Detailed consolidation of all eight uploaded prompt parts, implementation readiness findings, security risks, verification checklist, and checkpoint history."
+
+[[outputs]]
+id = "N2b2H4TAqrELGdjx_AHbj"
+uri = "file://android-app/app/src/main/assets/templates/target1.png"
+type = "image"
+title = "target1.png"
+description = "Built-in target template stored in app/src/main/assets/templates/."
+
+[[outputs]]
+id = "jUdrnm_Y2eBlScfk67R3P"
+uri = "file://android-app/app/src/main/assets/templates/target2.png"
+type = "image"
+title = "target2.png"
+description = "Built-in target template stored in app/src/main/assets/templates/."
+
+[[outputs]]
+id = "Xz5qZFENqIXueR-cUcdOa"
+uri = "file://android-app/app/src/main/assets/templates/target3.png"
+type = "image"
+title = "target3.png"
+description = "Built-in target template stored in app/src/main/assets/templates/."
+
+[[outputs]]
+id = "7BCXcMHMxDkbj2x3B71tx"
+uri = "file://android-app/app/src/main/assets/templates/target4.png"
+type = "image"
+title = "target4.png"
+description = "Built-in target template stored in app/src/main/assets/templates/."
