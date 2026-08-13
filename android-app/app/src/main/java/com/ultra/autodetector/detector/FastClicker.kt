@@ -17,8 +17,62 @@ class FastClicker(
     private val service: AccessibilityService,
     private val handler: Handler,
 ) : AutoCloseable {
-    fun click(x: Float, y: Float): Boolean {
+    fun doubleClick(x: Float, y: Float): Boolean {
         val startedAt = SystemClock.uptimeMillis()
+        val accepted = dispatchTap(
+            x = x,
+            y = y,
+            onCompleted = {
+                val secondTap = Runnable {
+                    val secondAccepted = dispatchTap(
+                        x = x,
+                        y = y,
+                        onCompleted = {
+                            Log.i(
+                                TAG,
+                                "DOUBLE CLICKED at ${x.toInt()},${y.toInt()} in " +
+                                    "${SystemClock.uptimeMillis() - startedAt}ms",
+                            )
+                        },
+                        // The first tap already reached the target, so only
+                        // use one node fallback when the second gesture fails.
+                        onCancelled = { clickAccessibilityNode(x, y) },
+                    )
+                    if (!secondAccepted) clickAccessibilityNode(x, y)
+                }
+                handler.postDelayed(secondTap, DOUBLE_TAP_DELAY_MS)
+            },
+            // If the first gesture is rejected/cancelled, neither tap reached
+            // the target, so perform both actions through the node fallback.
+            onCancelled = { doubleClickAccessibilityNodeAt(x, y) },
+        )
+        if (!accepted) doubleClickAccessibilityNodeAt(x, y)
+        return accepted
+    }
+
+    fun doubleClick(node: AccessibilityNodeInfo): Boolean {
+        val firstAccepted = runCatching {
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }.getOrDefault(false)
+        if (!firstAccepted) return false
+
+        handler.postDelayed(
+            {
+                runCatching {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+            },
+            DOUBLE_TAP_DELAY_MS,
+        )
+        return true
+    }
+
+    private fun dispatchTap(
+        x: Float,
+        y: Float,
+        onCompleted: () -> Unit,
+        onCancelled: () -> Unit,
+    ): Boolean {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0L, 1L))
@@ -27,25 +81,33 @@ class FastClicker(
             gesture,
             object : AccessibilityService.GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
-                    Log.i(TAG, "CLICKED at ${x.toInt()},${y.toInt()} in ${SystemClock.uptimeMillis() - startedAt}ms")
+                    onCompleted()
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
-                    if (clickAccessibilityNode(x, y)) {
-                        Log.i(TAG, "CLICKED via node at ${x.toInt()},${y.toInt()}")
-                    }
+                    onCancelled()
                 }
             },
             handler,
         )
-        if (!accepted) {
-            clickAccessibilityNode(x, y)
-        }
         return accepted
     }
 
-    fun click(rect: Rect): Boolean =
-        if (rect.isEmpty) false else click(rect.exactCenterX(), rect.exactCenterY())
+    fun doubleClick(rect: Rect): Boolean =
+        if (rect.isEmpty) false else doubleClick(rect.exactCenterX(), rect.exactCenterY())
+
+    private fun doubleClickAccessibilityNodeAt(targetX: Float, targetY: Float): Boolean {
+        val root = service.rootInActiveWindow ?: return false
+        val node = findClickableNode(root, targetX.toInt(), targetY.toInt()) ?: return false
+        val first = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        if (first) {
+            handler.postDelayed(
+                { runCatching { node.performAction(AccessibilityNodeInfo.ACTION_CLICK) } },
+                DOUBLE_TAP_DELAY_MS,
+            )
+        }
+        return first
+    }
 
     private fun clickAccessibilityNode(targetX: Float, targetY: Float): Boolean {
         val root = service.rootInActiveWindow ?: return false
@@ -74,5 +136,6 @@ class FastClicker(
 
     companion object {
         private const val TAG = "FastClicker"
+        private const val DOUBLE_TAP_DELAY_MS = 90L
     }
 }

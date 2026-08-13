@@ -230,7 +230,7 @@ class AutoDetectorService : AccessibilityService() {
     }
 
     private fun performFastClick(x: Float, y: Float) {
-        clicker.click(x, y)
+        clicker.doubleClick(x, y)
     }
 
     private fun publishOverlay(found: Detection) {
@@ -254,9 +254,9 @@ class AutoDetectorService : AccessibilityService() {
         templates.getAllTemplates().filter { it.isActive }.forEach { template ->
             val nodes = root.findAccessibilityNodeInfosByText(template.name)
             val node = nodes.firstOrNull() ?: return@forEach
-            if (node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) {
+            if (clicker.doubleClick(node)) {
                 lastClickAt = now
-                Log.i(TAG, "Accessibility fallback clicked ${template.name}")
+                Log.i(TAG, "Accessibility fallback double-clicked ${template.name}")
                 return
             }
         }
