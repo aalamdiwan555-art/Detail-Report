@@ -53,7 +53,8 @@ and Stop remain hidden until this setup is complete. The Start button then
 opens the MediaProjection consent flow for the current session.
 
 Regular users cannot view the built-in template gallery. The gallery remains
-available to administrators after they enter through the hidden logo gesture.
+available to administrators after they hold the visible ULTRA logo for six
+seconds and enter the configured administrator credentials.
 
 ## Safety boundary
 

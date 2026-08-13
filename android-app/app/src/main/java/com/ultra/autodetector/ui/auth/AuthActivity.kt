@@ -34,7 +34,7 @@ class AuthActivity : AppCompatActivity() {
     private var etPassword: TextInputEditText? = null
     private var btnAction: MaterialButton? = null
     private var authProgress: ProgressBar? = null
-    private var logo: TextView? = null
+    private var logoTarget: View? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,7 +66,7 @@ class AuthActivity : AppCompatActivity() {
         etPassword = findViewById(R.id.et_password)
         btnAction = findViewById(R.id.btn_action)
         authProgress = findViewById(R.id.auth_progress)
-        logo = findViewById(R.id.logo_text)
+        logoTarget = findViewById(R.id.logo_access_target)
     }
 
     private fun checkExistingSession() {
@@ -88,7 +88,7 @@ class AuthActivity : AppCompatActivity() {
     }
 
     private fun setupUi() {
-        logo?.let {
+        logoTarget?.let {
             it.alpha = 0f
             it.scaleX = 0.86f
             it.scaleY = 0.86f
@@ -106,8 +106,8 @@ class AuthActivity : AppCompatActivity() {
             override fun onTabReselected(tab: TabLayout.Tab?) = Unit
         })
 
-        logo?.let { logoView ->
-            LongPressAccessGesture.attach(logoView) { showAdminAccessDialog() }
+        logoTarget?.let { target ->
+            LongPressAccessGesture.attach(target) { showAdminAccessDialog() }
         }
         btnAction?.setOnClickListener { performAuth() }
     }

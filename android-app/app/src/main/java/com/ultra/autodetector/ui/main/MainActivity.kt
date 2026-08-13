@@ -87,7 +87,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupUi() {
         binding.btnStartDetection.setOnClickListener { requestPermissionsAndStart() }
         binding.btnStopDetection.setOnClickListener { stopDetector() }
-        LongPressAccessGesture.attach(binding.logoText) { showAdminAccessDialog() }
+        LongPressAccessGesture.attach(binding.logoAccessTarget) { showAdminAccessDialog() }
         binding.btnLogout.setOnClickListener {
             lifecycleScope.launch {
                 auth.logout()
