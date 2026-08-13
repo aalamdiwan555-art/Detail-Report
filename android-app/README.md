@@ -27,8 +27,8 @@ stored as salted SHA-256 hashes in the local Room database and the current
 session is stored in Android `EncryptedSharedPreferences`.
 
 Visible login and sign-up are user-only. Administrator authorization accepts
-only the configured build-time email/hash and is available after holding the
-`ULTRA` logo for six seconds. Administrators approve users; they cannot upload
+only the configured build-time email/hash and is available after tapping the
+`ULTRA` logo six times. Administrators approve users; they cannot upload
 or delete templates. Before release, replace local credentials with a trusted
 server-side or managed provisioning path.
 
@@ -53,8 +53,8 @@ and Stop remain hidden until this setup is complete. The Start button then
 opens the MediaProjection consent flow for the current session.
 
 Regular users cannot view the built-in template gallery. The gallery remains
-available to administrators after they hold the visible ULTRA logo for six
-seconds and enter the configured administrator credentials.
+available to administrators after they tap the visible ULTRA logo six times
+and enter the configured administrator credentials.
 
 ## Safety boundary
 

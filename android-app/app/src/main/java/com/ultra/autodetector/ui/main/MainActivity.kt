@@ -29,7 +29,7 @@ import com.ultra.autodetector.service.FloatingOverlayService
 import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.auth.AuthActivity
 import com.ultra.autodetector.util.BackgroundPermissionHelper
-import com.ultra.autodetector.util.LongPressAccessGesture
+import com.ultra.autodetector.util.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,7 +87,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupUi() {
         binding.btnStartDetection.setOnClickListener { requestPermissionsAndStart() }
         binding.btnStopDetection.setOnClickListener { stopDetector() }
-        LongPressAccessGesture.attach(binding.logoAccessTarget) { showAdminAccessDialog() }
+        LogoTapAccessGesture.attach(binding.logoAccessTarget) { showAdminAccessDialog() }
         binding.btnLogout.setOnClickListener {
             lifecycleScope.launch {
                 auth.logout()

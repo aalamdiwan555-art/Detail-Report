@@ -25,7 +25,7 @@
                 android:padding="4dp"
                 android:clickable="true"
                 android:focusable="true"
-                android:contentDescription="ULTRA logo. Hold for six seconds for administrator access">
+                android:contentDescription="ULTRA logo. Tap six times for administrator access">
                 <ImageView
                     android:id="@+id/logo_mark"
                     android:layout_width="40dp"

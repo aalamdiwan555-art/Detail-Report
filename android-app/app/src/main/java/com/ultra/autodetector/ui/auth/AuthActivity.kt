@@ -16,7 +16,7 @@ import com.ultra.autodetector.R
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.main.MainActivity
-import com.ultra.autodetector.util.LongPressAccessGesture
+import com.ultra.autodetector.util.*
 import kotlinx.coroutines.launch
 
 class AuthActivity : AppCompatActivity() {
@@ -107,7 +107,7 @@ class AuthActivity : AppCompatActivity() {
         })
 
         logoTarget?.let { target ->
-            LongPressAccessGesture.attach(target) { showAdminAccessDialog() }
+            LogoTapAccessGesture.attach(target) { showAdminAccessDialog() }
         }
         btnAction?.setOnClickListener { performAuth() }
     }

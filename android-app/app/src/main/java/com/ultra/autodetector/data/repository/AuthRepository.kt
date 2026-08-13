@@ -183,7 +183,7 @@ class AuthRepository(context: Context) {
     /**
      * Administrator authentication is deliberately kept off the normal login
      * and sign-up paths. The UI reaches this method only after the hidden
-     * long-press gesture on the ULTRA logo.
+     * six-tap gesture on the ULTRA logo.
      */
     suspend fun loginAdmin(email: String, password: String): Result<User> = runCatching {
         val normalizedEmail = validateEmail(email)
