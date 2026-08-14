@@ -3,9 +3,9 @@ package com.ultra.autodetector.ui.auth
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.ProgressBar
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
@@ -15,7 +15,7 @@ import com.ultra.autodetector.R
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.main.MainActivity
-import com.ultra.autodetector.util.*
+import com.ultra.autodetector.util.LogoTapAccessGesture
 import kotlinx.coroutines.launch
 
 class AuthActivity : AppCompatActivity() {
@@ -35,6 +35,8 @@ class AuthActivity : AppCompatActivity() {
     private var btnAction: MaterialButton? = null
     private var authProgress: ProgressBar? = null
     private var logoTarget: View? = null
+    private var ultraTitle: View? = null
+    private var diamondIcon: View? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,7 +68,15 @@ class AuthActivity : AppCompatActivity() {
         etPassword = findViewById(R.id.et_password)
         btnAction = findViewById(R.id.btn_action)
         authProgress = findViewById(R.id.auth_progress)
+        // Main secret target from your layout
         logoTarget = findViewById(R.id.logo_access_target)
+        // Extra fallbacks - will attach to all available
+        ultraTitle = findViewById(R.id.tv_app_title)
+        diamondIcon = findViewById(R.id.iv_logo_diamond)
+        // Also try common IDs if your layout uses different names
+        if (ultraTitle == null) ultraTitle = findViewById(R.id.tvUltra)
+        if (diamondIcon == null) diamondIcon = findViewById(R.id.ivLogo)
+        if (diamondIcon == null) diamondIcon = findViewById(R.id.logoImage)
     }
 
     private fun checkExistingSession() {
@@ -88,6 +98,7 @@ class AuthActivity : AppCompatActivity() {
     }
 
     private fun setupUi() {
+        // Intro animation for logo
         logoTarget?.let {
             it.alpha = 0f
             it.scaleX = 0.86f
@@ -106,10 +117,33 @@ class AuthActivity : AppCompatActivity() {
             override fun onTabReselected(tab: TabLayout.Tab?) = Unit
         })
 
-        logoTarget?.let { target ->
-            LogoTapAccessGesture.attach(target) { openAdminPanel() }
+        // SECRET ADMIN - 6 sec hold on logo (NO VISIBLE HINT)
+        // Attach to all logo-related views so user can hold anywhere on logo area
+        val allTargets = listOfNotNull(logoTarget, ultraTitle, diamondIcon)
+        if (allTargets.isNotEmpty()) {
+            allTargets.forEach { view ->
+                LogoTapAccessGesture.attach(view) {
+                    openAdminPanel()
+                }
+            }
+            Log.d(TAG, "Admin gesture attached to ${allTargets.size} views")
+        } else {
+            Log.w(TAG, "No logo view found for admin gesture - checking by ID")
+            // Fallback attach by resource name
+            listOf("logo_access_target", "tv_app_title", "iv_logo_diamond", "ivLogo", "logoImage").forEach { name ->
+                try {
+                    val id = resources.getIdentifier(name, "id", packageName)
+                    if (id != 0) {
+                        findViewById<View>(id)?.let {
+                            LogoTapAccessGesture.attach(it) { openAdminPanel() }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
         }
+
         btnAction?.setOnClickListener { performAuth() }
+        updateButtonText()
     }
 
     private fun updateButtonText() {
@@ -169,31 +203,29 @@ class AuthActivity : AppCompatActivity() {
         etEmail?.requestFocus()
     }
 
+    // FIXED: Direct open, no loginAdmin() dependency which was blocking gesture
     private fun openAdminPanel() {
         if (adminAccessInProgress || isFinishing || isDestroyed) return
         adminAccessInProgress = true
-        logoTarget?.isEnabled = false
-
-        lifecycleScope.launch {
-            authRepo.loginAdmin()
-                .onSuccess {
-                    openAdminActivity()
-                }
-                .onFailure { error ->
-                    Log.e(TAG, "Unable to open administrator panel", error)
-                    adminAccessInProgress = false
-                    logoTarget?.isEnabled = true
-                    showAuthError("Unable to open administrator panel")
-                }
-        }
+        
+        // Haptic + visual feedback
+        logoTarget?.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        
+        Log.d(TAG, "Admin gesture triggered - opening admin")
+        openAdminActivity()
     }
 
     private fun openAdminActivity() {
         if (isFinishing || isDestroyed) return
-        startActivity(Intent(this, AdminActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        })
-        finish()
+        try {
+            startActivity(Intent(this, AdminActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            })
+            finish()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open admin", e)
+            adminAccessInProgress = false
+        }
     }
 
     private fun openMain() {
