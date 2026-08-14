@@ -36,7 +36,6 @@ object LogoTapAccessGesture {
             holdRunnable?.let(handler::removeCallbacks)
             holdRunnable = null
             v.parent?.requestDisallowInterceptTouchEvent(false)
-            v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
         }
 
         target.setOnTouchListener { v, event ->
@@ -59,8 +58,7 @@ object LogoTapAccessGesture {
                     holdRunnable = runnable
                     handler.postDelayed(runnable, HOLD_DURATION_MS)
 
-                    // Visual feedback - shrink
-                    v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(150).start()
+                    // Keep the logo and label visually normal while the hidden hold is active.
                     true
                 }
 
