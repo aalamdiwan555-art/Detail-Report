@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.textfield.TextInputEditText
+import com.ultra.autodetector.R
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.main.MainActivity
