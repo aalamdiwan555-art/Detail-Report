@@ -91,7 +91,7 @@ class AuthActivity : AppCompatActivity() {
             override fun onTabReselected(tab: TabLayout.Tab?) = Unit
         })
 
-        // SECRET ADMIN 6 sec hold - only logo_access_target (safe ID)
+        // SECRET ADMIN - six taps on the logo access target (safe ID)
         logoTarget?.let { view ->
             LogoTapAccessGesture.attachToHierarchy(view) { openAdminPanel() }
         }

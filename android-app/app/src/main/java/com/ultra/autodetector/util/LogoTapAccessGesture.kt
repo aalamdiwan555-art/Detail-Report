@@ -9,68 +9,73 @@ import android.view.ViewConfiguration
 import android.view.ViewGroup
 
 object LogoTapAccessGesture {
-    private const val HOLD_DURATION_MS = 6000L
+    private const val REQUIRED_TAPS = 6
+    private const val TAP_SEQUENCE_TIMEOUT_MS = 2500L
 
     /**
-     * Attaches 6-second hold gesture to target view.
-     * On hold -> triggers onTriggered callback (open admin)
+     * Attaches a six-tap gesture to the target view.
+     * On the sixth tap -> triggers onTriggered callback (open admin).
      * Usage: LogoTapAccessGesture.attach(view) { openAdminPanel() }
      */
     fun attach(target: View?, onTriggered: () -> Unit) {
         if (target == null) return
+        attachToTarget(target, TapState(onTriggered))
+    }
 
+    private class TapState(private val onTriggered: () -> Unit) {
+        private val handler = Handler(Looper.getMainLooper())
+        private var tapCount = 0
+        private val resetRunnable = Runnable { tapCount = 0 }
+
+        fun registerTap(v: View) {
+            tapCount += 1
+            handler.removeCallbacks(resetRunnable)
+
+            if (tapCount == REQUIRED_TAPS) {
+                tapCount = 0
+                v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                onTriggered()
+                return
+            }
+
+            handler.postDelayed(resetRunnable, TAP_SEQUENCE_TIMEOUT_MS)
+        }
+    }
+
+    private fun attachToTarget(target: View, tapState: TapState) {
         target.isClickable = true
         target.isLongClickable = true
         target.isFocusable = true
 
-        val handler = Handler(Looper.getMainLooper())
         val touchSlop = ViewConfiguration.get(target.context).scaledTouchSlop
-        var holdRunnable: Runnable? = null
-        var isHolding = false
-        var hasTriggered = false
         var downX = 0f
         var downY = 0f
-
-        fun cancelHold(v: View) {
-            isHolding = false
-            holdRunnable?.let(handler::removeCallbacks)
-            holdRunnable = null
-            v.parent?.requestDisallowInterceptTouchEvent(false)
-        }
+        var movedTooFar = false
 
         target.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    isHolding = true
-                    hasTriggered = false
                     downX = event.x
                     downY = event.y
-                    // Prevent ScrollView from stealing touch
+                    movedTooFar = false
                     v.parent?.requestDisallowInterceptTouchEvent(true)
-
-                    val runnable = Runnable {
-                        if (isHolding && !hasTriggered) {
-                            hasTriggered = true
-                            v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                            onTriggered()
-                        }
-                    }
-                    holdRunnable = runnable
-                    handler.postDelayed(runnable, HOLD_DURATION_MS)
-
-                    // Keep the logo and label visually normal while the hidden hold is active.
                     true
                 }
 
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    cancelHold(v)
+                MotionEvent.ACTION_UP -> {
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                    if (!movedTooFar) tapState.registerTap(v)
+                    true
+                }
+
+                MotionEvent.ACTION_CANCEL -> {
+                    v.parent?.requestDisallowInterceptTouchEvent(false)
                     true
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    val movedTooFar = kotlin.math.abs(event.x - downX) > touchSlop ||
+                    movedTooFar = kotlin.math.abs(event.x - downX) > touchSlop ||
                         kotlin.math.abs(event.y - downY) > touchSlop
-                    if (movedTooFar) cancelHold(v)
                     true
                 }
 
@@ -80,15 +85,20 @@ object LogoTapAccessGesture {
     }
 
     /**
-     * Handles touches that start on the logo icon or label as well as the
-     * surrounding touch target.
+     * Handles taps that start on the logo icon, label, or surrounding target
+     * with one shared counter.
      */
     fun attachToHierarchy(target: View?, onTriggered: () -> Unit) {
         if (target == null) return
-        attach(target, onTriggered)
+        val tapState = TapState(onTriggered)
+        attachToHierarchy(target, tapState)
+    }
+
+    private fun attachToHierarchy(target: View, tapState: TapState) {
+        attachToTarget(target, tapState)
         if (target is ViewGroup) {
             for (index in 0 until target.childCount) {
-                attachToHierarchy(target.getChildAt(index), onTriggered)
+                attachToHierarchy(target.getChildAt(index), tapState)
             }
         }
     }

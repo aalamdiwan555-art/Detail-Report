@@ -72,7 +72,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnStartDetection.setOnClickListener { requestPermissionsAndStart() }
         binding.btnStopDetection.setOnClickListener { stopDetector() }
 
-        // SECRET ADMIN - 6 sec hold on ULTRA logo (120dp x 60dp touch area)
+        // SECRET ADMIN - six taps on ULTRA logo (104dp x 52dp touch area)
         binding.logoAccessTarget.apply {
             isClickable = true
             isLongClickable = true
