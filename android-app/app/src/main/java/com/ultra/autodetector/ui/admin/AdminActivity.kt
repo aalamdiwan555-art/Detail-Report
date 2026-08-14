@@ -6,9 +6,9 @@ import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Spinner
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -21,6 +21,7 @@ import com.ultra.autodetector.R
 import com.ultra.autodetector.data.local.ActionEntity
 import com.ultra.autodetector.data.local.AppDatabase
 import com.ultra.autodetector.data.local.TemplateEntity
+import com.ultra.autodetector.data.local.UserEntity
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.data.repository.TemplateStore
 import com.ultra.autodetector.databinding.ActivityAdminBinding
@@ -72,6 +73,7 @@ class AdminActivity : AppCompatActivity() {
         binding.btnClearData.setOnClickListener { confirmClearData() }
         binding.btnExportLogs.setOnClickListener { exportLauncher.launch("ultra-detection-logs.txt") }
         binding.btnOpenLogs.setOnClickListener { startActivity(Intent(this, LogsActivity::class.java)) }
+        binding.btnManageUsers.setOnClickListener { showUserManagement() }
         lifecycleScope.launch {
             if (auth.currentUser()?.isAdmin != true) {
                 finish()
@@ -258,6 +260,90 @@ class AdminActivity : AppCompatActivity() {
                 }
             }
             .show()
+    }
+
+    private fun showUserManagement() {
+        lifecycleScope.launch {
+            val users = withContext(Dispatchers.IO) { database.userDao().getAll() }
+            val list = LinearLayout(this@AdminActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(26, 8, 26, 0)
+            }
+
+            if (users.isEmpty()) {
+                list.addView(TextView(this@AdminActivity).apply {
+                    text = "No accounts have been created yet."
+                    setTextColor(getColor(R.color.muted))
+                    setPadding(0, 18, 0, 18)
+                })
+            } else {
+                users.forEach { user ->
+                    val row = LinearLayout(this@AdminActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(0, 12, 0, 12)
+                    }
+                    row.addView(TextView(this@AdminActivity).apply {
+                        text = user.email
+                        textSize = 16f
+                        setTextColor(getColor(R.color.white))
+                    })
+                    row.addView(TextView(this@AdminActivity).apply {
+                        text = if (user.isAdmin) "ADMIN • Lifetime access" else user.remainingLabel()
+                        setTextColor(getColor(R.color.muted))
+                    })
+                    if (!user.isAdmin) {
+                        val actions = LinearLayout(this@AdminActivity).apply {
+                            orientation = LinearLayout.HORIZONTAL
+                        }
+                        actions.addView(MaterialButton(this@AdminActivity).apply {
+                            text = "APPROVE 30 DAYS"
+                            setOnClickListener {
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    database.userDao().updateStatus(
+                                        user.id,
+                                        UserEntity.STATUS_APPROVED,
+                                        System.currentTimeMillis() + 30L * 24L * 60L * 60L * 1000L,
+                                    )
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(
+                                            this@AdminActivity,
+                                            "${user.email} approved",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                        showUserManagement()
+                                    }
+                                }
+                            }
+                        })
+                        actions.addView(MaterialButton(this@AdminActivity).apply {
+                            text = "REJECT"
+                            setTextColor(getColor(R.color.error))
+                            setOnClickListener {
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    database.userDao().updateStatus(user.id, UserEntity.STATUS_REJECTED)
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(
+                                            this@AdminActivity,
+                                            "${user.email} rejected",
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                        showUserManagement()
+                                    }
+                                }
+                            }
+                        })
+                        row.addView(actions)
+                    }
+                    list.addView(row)
+                }
+            }
+
+            MaterialAlertDialogBuilder(this@AdminActivity)
+                .setTitle("Manage users")
+                .setView(ScrollView(this@AdminActivity).apply { addView(list) })
+                .setPositiveButton("DONE", null)
+                .show()
+        }
     }
 
     private fun exportLogs(uri: Uri) {

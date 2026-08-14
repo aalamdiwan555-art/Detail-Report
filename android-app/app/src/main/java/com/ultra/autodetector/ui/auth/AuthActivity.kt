@@ -10,11 +10,9 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.textfield.TextInputEditText
-import com.ultra.autodetector.R
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.main.MainActivity
-import com.ultra.autodetector.util.LogoTapAccessGesture
 import kotlinx.coroutines.launch
 
 class AuthActivity : AppCompatActivity() {
@@ -26,7 +24,6 @@ class AuthActivity : AppCompatActivity() {
     private lateinit var authRepo: AuthRepository
     private var navigationStarted = false
     private var lastNavigationTime = 0L
-    private var adminAccessInProgress = false
 
     private var tabs: TabLayout? = null
     private var etEmail: TextInputEditText? = null
@@ -91,26 +88,6 @@ class AuthActivity : AppCompatActivity() {
             override fun onTabReselected(tab: TabLayout.Tab?) = Unit
         })
 
-        // SECRET ADMIN - six taps on the logo access target (safe ID)
-        logoTarget?.let { view ->
-            LogoTapAccessGesture.attachToHierarchy(view) { openAdminPanel() }
-        }
-
-        // Safe fallback via getIdentifier - no compile-time R reference
-        try {
-            val fallbackNames = listOf("ivLogo", "logoImage", "ivAppLogo", "logo", "tvUltra")
-            fallbackNames.forEach { name ->
-                val id = resources.getIdentifier(name, "id", packageName)
-                if (id != 0) {
-                    findViewById<View>(id)?.let {
-                        if (it != logoTarget) {
-                            LogoTapAccessGesture.attachToHierarchy(it) { openAdminPanel() }
-                        }
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-
         btnAction?.setOnClickListener { performAuth() }
         updateButtonText()
     }
@@ -153,12 +130,6 @@ class AuthActivity : AppCompatActivity() {
                 etEmail?.error = e.message ?: "Unexpected error"
             }
         }
-    }
-
-    private fun openAdminPanel() {
-        if (adminAccessInProgress || isFinishing || isDestroyed) return
-        adminAccessInProgress = true
-        openAdminActivity()
     }
 
     private fun openAdminActivity() {
