@@ -15,7 +15,8 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
             <LinearLayout
                 android:id="@+id/logo_access_target"
                 android:layout_width="wrap_content"
@@ -25,7 +26,7 @@
                 android:padding="4dp"
                 android:clickable="true"
                 android:focusable="true"
-                android:contentDescription="ULTRA logo. Tap ten times for administrator access">
+                 android:contentDescription="ULTRA logo">
                 <ImageView
                     android:id="@+id/logo_mark"
                     android:layout_width="40dp"
@@ -52,11 +53,15 @@
                 android:layout_height="14dp"
                 android:background="@drawable/bg_status_red" />
             <TextView
-                android:id="@+id/status_text"
+                 android:id="@+id/tvStatus"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
                 android:layout_weight="1"
+                 android:ellipsize="end"
+                 android:gravity="center"
+                 android:maxLines="1"
+                 android:singleLine="true"
                 android:text="STOPPED"
                 android:textColor="@android:color/white"
                 android:textSize="22sp"
@@ -111,31 +116,6 @@
             android:text="Ready"
             android:textColor="@android:color/white"
             android:textSize="14sp" />
-
-        <TextView
-            android:id="@+id/template_count"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="Built-in templates"
-            android:textColor="@color/primary"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-        <GridLayout
-            android:id="@+id/template_grid"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:columnCount="2"
-            android:useDefaultMargins="true" />
-        <TextView
-            android:id="@+id/no_templates"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="16dp"
-            android:text="Add PNG, JPG, or WEBP files to app/src/main/assets/templates/"
-            android:textColor="@color/muted"
-            android:visibility="gone" />
 
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/show_overlay_switch"

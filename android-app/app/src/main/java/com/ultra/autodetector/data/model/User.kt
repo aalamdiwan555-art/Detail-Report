@@ -3,6 +3,8 @@ package com.ultra.autodetector.data.model
 data class User(
     val id: String,
     val email: String,
+    val role: String = ROLE_USER,
+    val isApproved: Boolean = true,
     val isAdmin: Boolean = false,
     val licenseStatus: String = "pending",
     val expiryDate: Long = 0L,
@@ -21,5 +23,10 @@ data class User(
         val days = (remaining / 86_400_000).toInt()
         val hours = ((remaining % 86_400_000) / 3_600_000).toInt()
         return "${days}d ${hours}h remaining"
+    }
+
+    companion object {
+        const val ROLE_USER = "user"
+        const val ROLE_ADMIN = "admin"
     }
 }

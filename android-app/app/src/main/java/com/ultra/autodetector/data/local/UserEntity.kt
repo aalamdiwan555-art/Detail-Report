@@ -14,6 +14,8 @@ data class UserEntity(
     @PrimaryKey val id: String,
     val email: String,
     val passwordHash: String,
+    val role: String = User.ROLE_USER,
+    val isApproved: Boolean = true,
     val isAdmin: Boolean = false,
     val licenseStatus: String = STATUS_PENDING,
     val expiryDate: Long = 0L,
@@ -41,6 +43,8 @@ data class UserEntity(
         return User(
             id = id,
             email = email,
+            role = role,
+            isApproved = isApproved,
             isAdmin = isAdmin,
             licenseStatus = licenseStatus,
             expiryDate = expiryDate,

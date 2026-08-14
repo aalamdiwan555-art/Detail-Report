@@ -3,39 +3,47 @@ package com.ultra.autodetector.util
 import android.os.Handler
 import android.os.Looper
 import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
+import android.widget.Toast
 
 /**
- * Provides a deliberate ten-tap local administrator entry gesture on the
- * visible ULTRA logo.
+ * Provides a deliberate six-second local administrator entry gesture on the
+ * visible ULTRA logo. There is intentionally no visible hint for this access
+ * path.
  */
 object LogoTapAccessGesture {
-    private const val REQUIRED_TAPS = 10
-    private const val TAP_SEQUENCE_TIMEOUT_MS = 6_000L
+    private const val HOLD_DURATION_MS = 6_000L
 
     fun attach(target: View, onTriggered: () -> Unit) {
         val handler = Handler(Looper.getMainLooper())
-        var tapCount = 0
-        val reset = Runnable { tapCount = 0 }
+        var triggered = false
+        var adminRunnable: Runnable? = null
 
-        target.setOnClickListener {
-            tapCount += 1
-            handler.removeCallbacks(reset)
-
-            val completed = tapCount == REQUIRED_TAPS
-            target.performHapticFeedback(
-                if (completed) {
-                    HapticFeedbackConstants.LONG_PRESS
-                } else {
-                    HapticFeedbackConstants.KEYBOARD_TAP
-                },
-            )
-
-            if (completed) {
-                tapCount = 0
-                onTriggered()
-            } else {
-                handler.postDelayed(reset, TAP_SEQUENCE_TIMEOUT_MS)
+        target.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    triggered = false
+                    adminRunnable?.let(handler::removeCallbacks)
+                    adminRunnable = Runnable {
+                        triggered = true
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        Toast.makeText(view.context, "Admin access", Toast.LENGTH_SHORT).show()
+                        onTriggered()
+                    }
+                    handler.postDelayed(adminRunnable!!, HOLD_DURATION_MS)
+                    view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(150L).start()
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    adminRunnable?.let(handler::removeCallbacks)
+                    adminRunnable = null
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(150L).start()
+                    true
+                }
+                else -> {
+                    if (triggered) true else false
+                }
             }
         }
     }

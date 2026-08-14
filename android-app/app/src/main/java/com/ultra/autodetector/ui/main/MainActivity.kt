@@ -8,59 +8,44 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
-import android.widget.SeekBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ultra.autodetector.R
-import com.ultra.autodetector.data.local.EncryptedPrefsManager
 import com.ultra.autodetector.data.model.User
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.databinding.ActivityMainBinding
-import com.ultra.autodetector.detector.BuiltInTemplateManager
 import com.ultra.autodetector.service.AutoDetectorService
 import com.ultra.autodetector.service.FloatingOverlayService
 import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.auth.AuthActivity
 import com.ultra.autodetector.util.BackgroundPermissionHelper
 import com.ultra.autodetector.util.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
     companion object {
         private const val REQUEST_NOTIFICATIONS = 7001
+        private const val REQUEST_CODE_SCREEN = 7002
+        private const val PREFS_PERMISSIONS = "ultra_permission_preferences"
+        private const val KEY_FIRST_LAUNCH_DONE = "first_launch_done"
     }
 
     private lateinit var binding: ActivityMainBinding
     private val auth by lazy { AuthRepository(this) }
-    private val encryptedPrefs by lazy { EncryptedPrefsManager(this) }
-    private val templateManager by lazy { BuiltInTemplateManager(this) }
-    @Volatile private var templatesReady = false
+    private val permissionPrefs by lazy {
+        getSharedPreferences(PREFS_PERMISSIONS, MODE_PRIVATE)
+    }
+    private var mediaProjectionPermissionGranted = false
     private var projectionData: Intent? = null
-    private var projectionResultCode = Activity.RESULT_CANCELED
     private var permissionDialog: Dialog? = null
-    private var permissionDialogUserId: String? = null
     private var adminAccessInProgress = false
-
-    private val projectionLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-                projectionResultCode = result.resultCode
-                projectionData = result.data
-                startDetector()
-            } else {
-                binding.detectorStatus.text = getString(R.string.screen_capture_cancelled)
-            }
-            refreshUi()
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,7 +59,6 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
             setupUi()
-            initializeTemplates()
         }
     }
 
@@ -110,18 +94,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun initializeTemplates() {
-        refreshUi()
-        lifecycleScope.launch {
-            withContext(Dispatchers.Default) {
-                (application as? com.ultra.autodetector.UltraAutoDetectorApp)?.ensureOpenCvLoaded()
-                templateManager.onCreate()
-            }
-            templatesReady = true
-            refreshUi()
-        }
-    }
-
     override fun onResume() {
         super.onResume()
         lifecycleScope.launch {
@@ -136,7 +108,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         dismissPermissionDialog()
-        if (templatesReady) templateManager.close()
         super.onDestroy()
     }
 
@@ -155,77 +126,43 @@ class MainActivity : AppCompatActivity() {
             }
             binding.accountDetails.text =
                 "Account ID: ${user.id}\nDevice: ${user.deviceId.ifBlank { "This device" }}"
-            val canViewTemplates = user.isAdmin
-            val templateVisibility = if (canViewTemplates) View.VISIBLE else View.GONE
-            binding.templateCount.visibility = templateVisibility
-            binding.templateGrid.visibility = templateVisibility
-            binding.noTemplates.visibility = templateVisibility
-            if (templatesReady) renderTemplates()
             val permissions = BackgroundPermissionHelper.status(this@MainActivity)
-            val onboardingComplete = encryptedPrefs.isPermissionOnboardingComplete(user.id) ||
-                permissions.allGranted
-            if (permissions.allGranted) {
-                encryptedPrefs.setPermissionOnboardingComplete(user.id, true)
-            }
-            binding.detectorControls.visibility =
-                if (onboardingComplete) View.VISIBLE else View.GONE
-            renderPermissions(permissions)
+            binding.detectorControls.visibility = View.VISIBLE
+            updatePermissionUI(permissions)
             renderStatus()
-            if (onboardingComplete) {
+            if (permissionPrefs.getBoolean(KEY_FIRST_LAUNCH_DONE, false)) {
                 dismissPermissionDialog()
+            } else if (permissionDialog != null) {
+                updatePermissionDialog()
+            } else if (!permissions.mainPermissionsGranted) {
+                showPermissionOnboarding()
             } else {
-                showPermissionOnboarding(user)
+                dismissPermissionDialog()
             }
         }
     }
 
-    private fun renderTemplates() {
-        binding.templateGrid.removeAllViews()
-        val items = templateManager.getAllTemplates()
-        binding.templateCount.text = "${items.count { it.isActive }} templates active"
-
-        items.forEach { template ->
-            val card = layoutInflater.inflate(R.layout.item_builtin_template, binding.templateGrid, false)
-            card.findViewById<android.widget.TextView>(R.id.template_name).text = template.name
-            card.findViewById<android.widget.ImageView>(R.id.template_image).setImageBitmap(template.bitmap)
-            card.findViewById<android.widget.TextView>(R.id.template_active).text = 
-                if (template.isActive) "Active" else "Inactive"
-
-            val seekBar = card.findViewById<SeekBar>(R.id.template_threshold)
-            val thresholdText = card.findViewById<android.widget.TextView>(R.id.template_threshold_text)
-            val initial = templateManager.thresholdFor(template.id)
-            seekBar.max = 25
-            seekBar.progress = ((initial - 0.70f) * 100).roundToInt().coerceIn(0, 25)
-            thresholdText.text = "Threshold %.2f".format(initial)
-
-            seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    val value = 0.70f + progress / 100f
-                    thresholdText.text = "Threshold %.2f".format(value)
-                    if (fromUser) templateManager.setThreshold(template.id, value)
-                }
-                override fun onStartTrackingTouch(bar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(bar: SeekBar?) = Unit
-            })
-            binding.templateGrid.addView(card)
-        }
-        binding.noTemplates.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
-    }
-
-    private fun renderPermissions(permissions: BackgroundPermissionHelper.Status) {
-        binding.accessibilityStatus.text = if (permissions.accessibility) "Granted" else "Required"
-        binding.overlayStatus.text = if (permissions.overlay) "Granted" else "Required"
-        binding.notificationStatus.text = if (permissions.notifications) "Granted" else "Required"
+    private fun updatePermissionUI(permissions: BackgroundPermissionHelper.Status) {
+        binding.accessibilityStatus.text =
+            if (permissions.accessibility) "Granted" else "Not Granted"
+        binding.overlayStatus.text =
+            if (permissions.overlay) "Granted" else "Not Granted"
+        binding.notificationStatus.text =
+            if (permissions.notifications) "Granted" else "Not Granted"
 
         val grantedColor = getColor(R.color.primary)
         val errorColor = getColor(R.color.error)
         binding.accessibilityStatus.setTextColor(if (permissions.accessibility) grantedColor else errorColor)
         binding.overlayStatus.setTextColor(if (permissions.overlay) grantedColor else errorColor)
         binding.notificationStatus.setTextColor(if (permissions.notifications) grantedColor else errorColor)
+        binding.btnAccessibility.visibility = if (permissions.accessibility) View.GONE else View.VISIBLE
+        binding.btnOverlay.visibility = if (permissions.overlay) View.GONE else View.VISIBLE
+        binding.btnNotifications.visibility =
+            if (permissions.notifications) View.GONE else View.VISIBLE
     }
 
-    private fun showPermissionOnboarding(user: User) {
-        if (permissionDialog != null && permissionDialogUserId == user.id) {
+    private fun showPermissionOnboarding() {
+        if (permissionDialog != null) {
             updatePermissionDialog()
             return
         }
@@ -233,13 +170,12 @@ class MainActivity : AppCompatActivity() {
         if (isFinishing || isDestroyed) return
 
         val dialog = Dialog(this)
-        dialog.setContentView(R.layout.dialog_permission_setup)
+        dialog.setContentView(R.layout.dialog_permissions_fullscreen)
         dialog.setCancelable(false)
         dialog.setCanceledOnTouchOutside(false)
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.window?.setDimAmount(0.85f)
         permissionDialog = dialog
-        permissionDialogUserId = user.id
         dialog.setOnShowListener {
             dialog.window?.setLayout(
                 android.view.WindowManager.LayoutParams.MATCH_PARENT,
@@ -262,39 +198,39 @@ class MainActivity : AppCompatActivity() {
             R.id.permission_accessibility_status to permissions.accessibility,
             R.id.permission_overlay_status to permissions.overlay,
             R.id.permission_notifications_status to permissions.notifications,
+            R.id.permission_battery_status to isIgnoringBatteryOptimizations(),
         )
         statusViews.forEach { (id, granted) ->
             dialog.findViewById<TextView>(id)?.apply {
-                text = if (granted) "Granted" else "Required"
+                text = if (granted) "Granted" else "Not Granted"
                 setTextColor(getColor(if (granted) R.color.primary else R.color.error))
             }
         }
 
-        if (permissions.allGranted) {
-            permissionDialogUserId?.let {
-                encryptedPrefs.setPermissionOnboardingComplete(it, true)
+        dialog.findViewById<MaterialButton>(R.id.btn_permission_accessibility)?.setOnClickListener {
+            startActivity(BackgroundPermissionHelper.accessibilityIntent())
+        }
+        dialog.findViewById<MaterialButton>(R.id.btn_permission_overlay)?.setOnClickListener {
+            startActivity(BackgroundPermissionHelper.overlayIntent(this@MainActivity))
+        }
+        dialog.findViewById<MaterialButton>(R.id.btn_permission_notifications)?.setOnClickListener {
+            requestNotificationPermission()
+        }
+        dialog.findViewById<MaterialButton>(R.id.btn_permission_battery)?.setOnClickListener {
+            runCatching {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        android.net.Uri.parse("package:$packageName"),
+                    ),
+                )
             }
-            dismissPermissionDialog()
-            return
         }
-
-        val nextPermission = when {
-            !permissions.accessibility -> "Accessibility service"
-            !permissions.overlay -> "Draw over other apps"
-            else -> "Notifications"
-        }
-        dialog.findViewById<TextView>(R.id.permission_setup_message)?.text =
-            "Grant $nextPermission to continue. Detection controls stay locked until every permission is ready."
         dialog.findViewById<MaterialButton>(R.id.btn_permission_continue)?.apply {
-            text = "GRANT $nextPermission".uppercase()
+            isEnabled = permissions.mainPermissionsGranted
             setOnClickListener {
-                when {
-                    !permissions.accessibility ->
-                        startActivity(BackgroundPermissionHelper.accessibilityIntent())
-                    !permissions.overlay ->
-                        startActivity(BackgroundPermissionHelper.overlayIntent(this@MainActivity))
-                    else -> requestNotificationPermission()
-                }
+                permissionPrefs.edit().putBoolean(KEY_FIRST_LAUNCH_DONE, true).apply()
+                dismissPermissionDialog()
             }
         }
     }
@@ -302,12 +238,11 @@ class MainActivity : AppCompatActivity() {
     private fun dismissPermissionDialog() {
         permissionDialog?.dismiss()
         permissionDialog = null
-        permissionDialogUserId = null
     }
 
     private fun renderStatus() {
         val running = AutoDetectorService.isRunning
-        binding.statusText.text = if (running) "RUNNING" else "STOPPED"
+        binding.tvStatus.text = if (running) "RUNNING" else "STOPPED"
         binding.statusDot.setBackgroundResource(if (running) R.drawable.bg_pulse_green else R.drawable.bg_status_red)
         binding.btnStartDetection.isEnabled = !running
         binding.btnStopDetection.isEnabled = running
@@ -346,10 +281,18 @@ class MainActivity : AppCompatActivity() {
             if (user == null) { navigateToAuth(); return@launch }
 
             val permissions = BackgroundPermissionHelper.status(this@MainActivity)
-            if (!permissions.allGranted ||
-                !encryptedPrefs.isPermissionOnboardingComplete(user.id)
-            ) {
-                showPermissionOnboarding(user)
+            if (!permissions.mainPermissionsGranted) {
+                if (!permissionPrefs.getBoolean(KEY_FIRST_LAUNCH_DONE, false)) {
+                    showPermissionOnboarding()
+                } else {
+                    when {
+                        !permissions.accessibility ->
+                            startActivity(BackgroundPermissionHelper.accessibilityIntent())
+                        !permissions.overlay ->
+                            startActivity(BackgroundPermissionHelper.overlayIntent(this@MainActivity))
+                        else -> requestNotificationPermission()
+                    }
+                }
                 return@launch
             }
 
@@ -373,7 +316,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun requestProjection() {
         val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        projectionLauncher.launch(manager.createScreenCaptureIntent())
+        if (!mediaProjectionPermissionGranted || projectionData == null) {
+            startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_CODE_SCREEN)
+        } else {
+            startDetector()
+        }
     }
 
     private fun startDetector() {
@@ -382,7 +329,7 @@ class MainActivity : AppCompatActivity() {
             this,
             Intent(this, AutoDetectorService::class.java)
                 .setAction(AutoDetectorService.ACTION_START)
-                .putExtra(AutoDetectorService.EXTRA_RESULT_CODE, projectionResultCode)
+                .putExtra(AutoDetectorService.EXTRA_RESULT_CODE, Activity.RESULT_OK)
                 .putExtra(AutoDetectorService.EXTRA_RESULT_DATA, data),
         )
         if (binding.showOverlaySwitch.isChecked) startOverlay()
@@ -392,9 +339,22 @@ class MainActivity : AppCompatActivity() {
     private fun stopDetector() {
         startService(Intent(this, AutoDetectorService::class.java).setAction(AutoDetectorService.ACTION_STOP))
         stopService(Intent(this, FloatingOverlayService::class.java))
-        projectionData = null
-        projectionResultCode = Activity.RESULT_CANCELED
         renderStatus()
+    }
+
+    @Deprecated("Use the Activity Result API in new screens")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_CODE_SCREEN) return
+
+        if (resultCode == Activity.RESULT_OK && data != null) {
+            mediaProjectionPermissionGranted = true
+            projectionData = data
+            startDetector()
+        } else {
+            binding.detectorStatus.text = getString(R.string.screen_capture_cancelled)
+        }
+        refreshUi()
     }
 
     private fun startOverlay() {
@@ -408,6 +368,9 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
         }
     }
-}
 
-private fun Float.roundToInt(): Int = kotlin.math.round(this).toInt()
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        return powerManager.isIgnoringBatteryOptimizations(packageName)
+    }
+}

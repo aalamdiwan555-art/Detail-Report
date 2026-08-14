@@ -12,11 +12,11 @@ template detection, license handling, and explicit gesture controls.
   approval notices. Detection templates are permanent app assets, not database
   records or synchronized uploads.
 - Build with `./gradlew assembleDebug` from `android-app/` on a machine with Android SDK platform 35.
-- Replit can validate Gradle configuration, but this container does not include the Android SDK, so APK compilation must run on an Android development machine.
+- Replit can validate Gradle configuration; APK compilation requires Java and Android SDK platform 35.
 
 The app currently uses local database mode:
 
-- Regular accounts are created as pending and require admin approval.
+- Regular accounts are created with the user role and an approved account flag; local license status still controls detector access.
 - Accounts, licenses, and session state are stored in the device-local Room
   database. Local mode is not production authentication.
 
@@ -56,13 +56,13 @@ The app currently uses local database mode:
 ## Architecture decisions
 
 - Visible login and sign-up create and authenticate regular user accounts only.
-  Administrator access is intentionally separate: tap the `ULTRA` logo ten
-  times. This local passwordless mode is not suitable for production or shared
+  Administrator access is intentionally separate: hold the `ULTRA` logo for six
+  seconds. This local passwordless mode is not suitable for production or shared
   devices.
 - Local database mode keeps the UI usable without cloud credentials.
-- On a user's first authenticated visit, a full-screen onboarding gate requires
-  accessibility, overlay, and notification permissions before detector controls
-  are revealed. Completion is tracked per local user.
+- On a user's first authenticated visit, a non-cancelable full-screen onboarding
+  gate lists accessibility, overlay, notification, and battery-optimization
+  settings. Continue unlocks after the three main permissions are granted.
 - Screen capture and overlay services start only after explicit user actions and permissions.
 - Regular users see account details, permission readiness, and detector controls;
   built-in templates remain hidden from them. Administrators can view templates
@@ -75,9 +75,9 @@ The app currently uses local database mode:
 
 ## Product
 
-Users can sign in or create a pending account, complete one-time device
+Users can sign in or create a user account, complete one-time device
 permission setup, review license status, and start/stop screen detection.
-  Trusted administrators enter through the ten-tap logo gesture and can
+  Trusted administrators enter through the six-second logo hold and can
 approve/reject users; built-in template assets are not managed at runtime.
 
 ## User preferences
@@ -87,7 +87,7 @@ approve/reject users; built-in template assets are not managed at runtime.
 ## Gotchas
 
 - Before release, replace local admin provisioning with a trusted server-side or managed provisioning path.
-- Android SDK platform 35 is required to compile the app; Replit's current container does not provide it.
+- Android SDK platform 35 and a compatible JDK are required to compile the app.
 
 ## Pointers
 

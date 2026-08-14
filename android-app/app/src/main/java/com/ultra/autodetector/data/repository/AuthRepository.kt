@@ -59,6 +59,8 @@ class AuthRepository(context: Context) {
                         JSONObject().apply {
                             put("id", user.id)
                             put("email", user.email)
+                            put("role", user.role)
+                            put("isApproved", user.isApproved)
                             put("isAdmin", user.isAdmin)
                             put("licenseStatus", user.licenseStatus)
                             put("expiryDate", user.expiryDate)
@@ -133,6 +135,8 @@ class AuthRepository(context: Context) {
                 id = "user-${UUID.randomUUID()}",
                 email = normalizedEmail,
                 passwordHash = hashedPassword,
+                role = User.ROLE_USER,
+                isApproved = true,
                 isAdmin = false,
                 licenseStatus = UserEntity.STATUS_PENDING,
                 expiryDate = 0L,
@@ -179,7 +183,7 @@ class AuthRepository(context: Context) {
 
     /**
      * The UI reaches this local administrator session method only after the
-     * ten-tap gesture on the ULTRA logo.
+     * six-second hold gesture on the ULTRA logo.
      */
     suspend fun loginAdmin(): Result<User> = runCatching {
         withContext(Dispatchers.IO) {
@@ -189,6 +193,8 @@ class AuthRepository(context: Context) {
                     id = ADMIN_ID,
                     email = ADMIN_ACCOUNT_EMAIL,
                     passwordHash = "",
+                    role = User.ROLE_ADMIN,
+                    isApproved = true,
                     isAdmin = true,
                     licenseStatus = UserEntity.STATUS_APPROVED,
                     expiryDate = Long.MAX_VALUE,
@@ -199,6 +205,8 @@ class AuthRepository(context: Context) {
                 // passwordless local administrator session.
                 existing.copy(
                     passwordHash = "",
+                    role = User.ROLE_ADMIN,
+                    isApproved = true,
                     isAdmin = true,
                     licenseStatus = UserEntity.STATUS_APPROVED,
                     expiryDate = Long.MAX_VALUE,
@@ -268,6 +276,8 @@ class AuthRepository(context: Context) {
         return User(
             id = id,
             email = email,
+            role = role,
+            isApproved = isApproved,
             isAdmin = isAdmin,
             licenseStatus = licenseStatus,
             expiryDate = expiryDate,

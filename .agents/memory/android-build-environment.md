@@ -9,13 +9,14 @@ The Android project requires an Android SDK installation with platform 35 and bu
 
 **How to apply:** Keep the native Gradle project unchanged. Build the APK on a machine or workspace with Android SDK platform 35 installed, then use `./gradlew assembleDebug` from `android-app/`.
 
-The system Gradle launcher in this workspace injects its own Java home, while
-the generated project wrapper expects `JAVA_HOME` or `java` on `PATH`; the
-wrapper is portable on a normal Android/Java machine but may need an explicit
-Java home in this container.
+The workspace's default GraalVM 19 can fail Android Gradle Plugin's JDK image
+transform against the Android 35 platform. An installed OpenJDK 17 or 21 and
+an explicit `JAVA_HOME` are reliable for the wrapper.
 
-**Why:** `gradle` can configure the project here, but `./gradlew` cannot find
-Java before it reaches the Android SDK check.
+**Why:** The wrapper can configure and compile Kotlin with the default runtime,
+but `compileDebugJavaWithJavac` may fail in the Android JDK image transform
+before Java compilation.
 
-**How to apply:** Treat `gradle :app:tasks` success as configuration-only.
-Run the wrapper on a machine with Java and Android SDK platform 35 installed.
+**How to apply:** Set `JAVA_HOME` to OpenJDK 17 or 21, set
+`ANDROID_HOME`/`ANDROID_SDK_ROOT` to an SDK containing platform 35, and run the
+wrapper from `android-app/`.

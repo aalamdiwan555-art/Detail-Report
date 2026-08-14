@@ -71,6 +71,8 @@ class UserRepository(context: Context) {
         return User(
             id = id,
             email = email,
+            role = role,
+            isApproved = isApproved,
             isAdmin = isAdmin,
             licenseStatus = licenseStatus,
             expiryDate = expiryDate,
