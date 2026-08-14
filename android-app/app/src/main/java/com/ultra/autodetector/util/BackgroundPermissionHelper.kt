@@ -35,7 +35,7 @@ object BackgroundPermissionHelper {
         ).any { service ->
             val info = service.resolveInfo?.serviceInfo ?: return@any false
             info.packageName == context.packageName &&
-            info.name == "com.ultra.autodetector.service.AutoDetectorService"
+            info.name == "com.ultra.autodetector.service.DetectionService"
         }
     }
 

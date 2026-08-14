@@ -20,7 +20,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ultra.autodetector.R
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.databinding.ActivityMainBinding
-import com.ultra.autodetector.service.AutoDetectorService
+import com.ultra.autodetector.service.DetectionService
 import com.ultra.autodetector.service.FloatingOverlayService
 import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.auth.AuthActivity
@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private var projectionData: Intent? = null
     private var permissionDialog: Dialog? = null
     private var adminAccessInProgress = false
+    private var detectionStartRequested = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,8 +70,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUi() {
-        binding.btnStartDetection.setOnClickListener { requestPermissionsAndStart() }
-        binding.btnStopDetection.setOnClickListener { stopDetector() }
+        binding.btnStartDetection.setOnClickListener {
+            if (DetectionService.isRunning || detectionStartRequested) {
+                stopDetector()
+            } else {
+                requestPermissionsAndStart()
+            }
+        }
 
         // SECRET ADMIN - six taps on ULTRA logo (104dp x 52dp touch area)
         binding.logoAccessTarget.apply {
@@ -93,10 +99,8 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnNotifications.setOnClickListener { requestNotificationPermission() }
         binding.showOverlaySwitch.setOnCheckedChangeListener { _, checked ->
-            if (AutoDetectorService.isRunning && checked) startOverlay()
-            if (AutoDetectorService.isRunning && !checked) {
-                stopService(Intent(this, FloatingOverlayService::class.java))
-            }
+            if (DetectionService.isRunning && checked) startOverlay()
+            if (DetectionService.isRunning && !checked) startOverlay()
         }
     }
 
@@ -135,6 +139,9 @@ class MainActivity : AppCompatActivity() {
             val permissions = BackgroundPermissionHelper.status(this@MainActivity)
             binding.detectorControls.visibility = View.VISIBLE
             updatePermissionUI(permissions)
+            if (!DetectionService.isRunning) {
+                detectionStartRequested = false
+            }
             renderStatus()
             if (permissionPrefs.getBoolean(KEY_FIRST_LAUNCH_DONE, false)) {
                 dismissPermissionDialog()
@@ -246,14 +253,13 @@ class MainActivity : AppCompatActivity() {
         permissionDialog = null
     }
 
-    private fun renderStatus() {
-        val running = AutoDetectorService.isRunning
+    private fun renderStatus(runningOverride: Boolean? = null) {
+        val running = runningOverride ?: (DetectionService.isRunning || detectionStartRequested)
         binding.tvStatus.text = if (running) "RUNNING" else "STOPPED"
         binding.statusDot.setBackgroundResource(if (running) R.drawable.bg_pulse_green else R.drawable.bg_status_red)
-        binding.btnStartDetection.isEnabled = !running
-        binding.btnStopDetection.isEnabled = running
-        binding.btnStartDetection.alpha = if (running) 0.55f else 1f
-        binding.btnStopDetection.alpha = if (running) 1f else 0.55f
+        binding.btnStartDetection.text = if (running) "STOP DETECTION" else "START DETECTION"
+        binding.btnStartDetection.isEnabled = true
+        binding.btnStartDetection.alpha = 1f
     }
 
     private fun openAdminPanel() {
@@ -331,21 +337,30 @@ class MainActivity : AppCompatActivity() {
 
     private fun startDetector() {
         val data = projectionData ?: return
-        ContextCompat.startForegroundService(
-            this,
-            Intent(this, AutoDetectorService::class.java)
-                .setAction(AutoDetectorService.ACTION_START)
-                .putExtra(AutoDetectorService.EXTRA_RESULT_CODE, Activity.RESULT_OK)
-                .putExtra(AutoDetectorService.EXTRA_RESULT_DATA, data),
-        )
-        if (binding.showOverlaySwitch.isChecked) startOverlay()
-        renderStatus()
+        runCatching {
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, DetectionService::class.java)
+                    .setAction(DetectionService.ACTION_START)
+                    .putExtra(DetectionService.EXTRA_RESULT_CODE, Activity.RESULT_OK)
+                    .putExtra(DetectionService.EXTRA_RESULT_DATA, data),
+            )
+            detectionStartRequested = true
+            binding.showOverlaySwitch.isChecked = true
+            startOverlay()
+            renderStatus()
+        }.onFailure {
+            detectionStartRequested = false
+            binding.detectorStatus.text = "Unable to start detection: ${it.message ?: "try again"}"
+            renderStatus()
+        }
     }
 
     private fun stopDetector() {
-        startService(Intent(this, AutoDetectorService::class.java).setAction(AutoDetectorService.ACTION_STOP))
+        detectionStartRequested = false
+        startService(Intent(this, DetectionService::class.java).setAction(DetectionService.ACTION_STOP))
         stopService(Intent(this, FloatingOverlayService::class.java))
-        renderStatus()
+        renderStatus(runningOverride = false)
     }
 
     @Deprecated("Use the Activity Result API in new screens")

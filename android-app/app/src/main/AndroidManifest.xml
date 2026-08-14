@@ -43,7 +43,7 @@
             android:screenOrientation="portrait" />
 
         <service
-            android:name=".service.AutoDetectorService"
+            android:name=".service.DetectionService"
             android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:foregroundServiceType="mediaProjection">

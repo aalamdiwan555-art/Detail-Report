@@ -35,9 +35,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 import java.util.concurrent.TimeUnit
 
-class AutoDetectorService : AccessibilityService() {
+class DetectionService : AccessibilityService() {
     companion object {
-        private const val TAG = "AutoDetectorService"
+        private const val TAG = "DetectionService"
         private const val NOTIFICATION_ID = 101
         private const val SCAN_INTERVAL_MS = 180L
         private const val CLICK_COOLDOWN_MS = 800L
@@ -349,8 +349,8 @@ class AutoDetectorRestartWorker(
     workerParams: WorkerParameters,
 ) : Worker(appContext, workerParams) {
     override fun doWork(): Result {
-        val intent = Intent(applicationContext, AutoDetectorService::class.java)
-            .setAction(AutoDetectorService.ACTION_RESTART)
+        val intent = Intent(applicationContext, DetectionService::class.java)
+            .setAction(DetectionService.ACTION_RESTART)
         runCatching { applicationContext.startService(intent) }
         return Result.success()
     }

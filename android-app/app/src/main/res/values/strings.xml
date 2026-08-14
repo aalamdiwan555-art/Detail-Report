@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Ultra AutoDetector</string>
+    <string name="app_name">ULTRA AUTO DETECTOR</string>
     <string name="screen_capture_cancelled">Screen capture cancelled</string>
     <string name="accessibility_service_description">Enables automated screen detection and interaction for authorized users only.</string>
 </resources>
