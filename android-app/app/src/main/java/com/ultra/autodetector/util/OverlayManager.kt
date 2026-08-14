@@ -13,7 +13,6 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
-import android.widget.Toast
 import com.ultra.autodetector.R
 import com.ultra.autodetector.service.DetectionService
 import kotlin.math.roundToInt
@@ -89,7 +88,7 @@ object OverlayManager {
         preferences: android.content.SharedPreferences,
         state: TouchState,
     ): Boolean {
-        when (event.actionMasked) {
+        return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 state.initialX = layoutParams.x
                 state.initialY = layoutParams.y
@@ -111,8 +110,8 @@ object OverlayManager {
                     layoutParams.x = state.initialX + dx.roundToInt()
                     layoutParams.y = state.initialY + dy.roundToInt()
                     runCatching {
-                        overlayView?.let { view ->
-                            windowManager?.updateViewLayout(view, layoutParams)
+                        overlayView?.let { v ->
+                            windowManager?.updateViewLayout(v, layoutParams)
                         }
                     }
                 }
@@ -123,25 +122,16 @@ object OverlayManager {
                 view.scaleX = 1.0f
                 view.scaleY = 1.0f
                 if (!state.isDragging) {
-                    view.animate()
-                        .scaleX(0.9f)
-                        .scaleY(0.9f)
-                        .setDuration(70L)
-                        .withEndAction {
-                            view.animate().scaleX(1.0f).scaleY(1.0f).setDuration(90L).start()
-                        }
-                        .start()
+                    view.animate().scaleX(0.9f).scaleY(0.9f).setDuration(70L).withEndAction {
+                        view.animate().scaleX(1.0f).scaleY(1.0f).setDuration(90L).start()
+                    }.start()
                     vibrate(context, 30L)
-                    Toast.makeText(context, "PUSH Clicked", Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, "PUSH Clicked", android.widget.Toast.LENGTH_SHORT).show()
                     context.sendBroadcast(
-                        Intent(DetectionService.ACTION_PUSH_CLICKED)
-                            .setPackage(context.packageName),
+                        Intent(DetectionService.ACTION_PUSH_CLICKED).setPackage(context.packageName),
                     )
                 } else {
-                    preferences.edit()
-                        .putInt(KEY_X, layoutParams.x)
-                        .putInt(KEY_Y, layoutParams.y)
-                        .apply()
+                    preferences.edit().putInt(KEY_X, layoutParams.x).putInt(KEY_Y, layoutParams.y).apply()
                 }
                 state.isDragging = false
                 true
@@ -160,12 +150,9 @@ object OverlayManager {
     private fun vibrate(context: Context, durationMs: Long) {
         val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(
-                VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE),
-            )
+            vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
         } else {
-            @Suppress("DEPRECATION")
-            vibrator.vibrate(durationMs)
+            @Suppress("DEPRECATION") vibrator.vibrate(durationMs)
         }
     }
 
@@ -184,6 +171,4 @@ object OverlayManager {
         } else {
             WindowManager.LayoutParams.TYPE_PHONE
         }
-
-    private fun dp(value: Int, density: Float): Int = (value * density).roundToInt()
 }
