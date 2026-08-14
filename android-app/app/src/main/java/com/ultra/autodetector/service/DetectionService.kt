@@ -167,7 +167,7 @@ class DetectionService : Service() {
             ?: ActionEntity(templateId = templateId)
         val performed = when (action.actionType.uppercase(Locale.US)) {
             ActionEntity.TYPE_SWIPE -> performSwipeAction(action.parameters, centerX, centerY)
-            else -> AutoDetectorService.performClick(centerX, centerY)
+            else -> UltraAccessibilityService.performClick(centerX, centerY)
         }
         log(
             message = if (performed) {
@@ -186,9 +186,9 @@ class DetectionService : Service() {
     private fun performSwipeAction(parameters: String, x: Int, y: Int): Boolean {
         val values = parameters.split(',').mapNotNull { it.trim().toIntOrNull() }
         return if (values.size == 4) {
-            AutoDetectorService.performSwipe(values[0], values[1], values[2], values[3])
+            UltraAccessibilityService.performSwipe(values[0], values[1], values[2], values[3])
         } else {
-            AutoDetectorService.performSwipe(x, y, x, (y - 400).coerceAtLeast(0))
+            UltraAccessibilityService.performSwipe(x, y, x, (y - 400).coerceAtLeast(0))
         }
     }
 

@@ -1,33 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="120dp"
-    android:layout_height="120dp"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
     android:background="@android:color/transparent"
-    android:clickable="true"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:contentDescription="ULTRA detection overlay">
 
-    <TextView
-        android:id="@+id/tvPushLogo"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@drawable/bg_push_logo"
-        android:gravity="center"
-        android:padding="8dp"
-        android:text="PUSH"
-        android:textColor="@android:color/white"
-        android:textSize="24sp"
-        android:textStyle="bold" />
+    <FrameLayout
+        android:id="@+id/pushRoot"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:alpha="0.9"
+        android:background="@drawable/bg_push_circle"
+        android:clickable="true"
+        android:contentDescription="Push detected action"
+        android:elevation="12dp">
+
+        <TextView
+            android:id="@+id/tvPush"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="PUSH"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </FrameLayout>
 
     <ImageButton
         android:id="@+id/btnCloseOverlay"
-        android:layout_width="34dp"
-        android:layout_height="34dp"
+        android:layout_width="22dp"
+        android:layout_height="22dp"
         android:layout_gravity="top|end"
-        android:layout_marginTop="-10dp"
-        android:layout_marginEnd="-10dp"
-        android:background="@drawable/bg_close_btn"
+        android:layout_marginTop="0dp"
+        android:layout_marginEnd="0dp"
+        android:background="@drawable/bg_close_circle"
         android:contentDescription="Stop detection"
-        android:padding="7dp"
+        android:elevation="14dp"
+        android:padding="4dp"
         android:src="@android:drawable/ic_menu_close_clear_cancel"
         android:tint="@android:color/white" />
 </FrameLayout>

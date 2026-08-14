@@ -1,6 +1,7 @@
 package com.ultra.autodetector.ui.main
 
-import android.Manifest
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
@@ -10,9 +11,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
+import android.view.HapticFeedbackConstants
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -24,7 +28,6 @@ import com.ultra.autodetector.databinding.ActivityMainBinding
 import com.ultra.autodetector.service.DetectionService
 import com.ultra.autodetector.ui.admin.AdminActivity
 import com.ultra.autodetector.ui.auth.AuthActivity
-import com.ultra.autodetector.util.LogoTapAccessGesture
 import com.ultra.autodetector.util.OverlayManager
 import com.ultra.autodetector.util.PermissionHelper
 import kotlinx.coroutines.launch
@@ -33,6 +36,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var authRepo: AuthRepository
     private var isDetecting = false
+    private var logoPulse: ObjectAnimator? = null
+    private var statusPulse: ObjectAnimator? = null
 
     private val settings by lazy {
         getSharedPreferences("detector_settings", MODE_PRIVATE)
@@ -65,6 +70,28 @@ class MainActivity : AppCompatActivity() {
         setupUserInfo()
         setupClicks()
         setupAdminAccess()
+        logoPulse = ObjectAnimator.ofFloat(
+            binding.logoAccessTarget,
+            View.SCALE_X,
+            1.0f,
+            1.05f,
+        ).apply {
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            duration = 2_000L
+            start()
+        }
+        ObjectAnimator.ofFloat(
+            binding.logoAccessTarget,
+            View.SCALE_Y,
+            1.0f,
+            1.05f,
+        ).apply {
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            duration = 2_000L
+            start()
+        }
         updateButton()
     }
 
@@ -93,17 +120,28 @@ class MainActivity : AppCompatActivity() {
             binding.tvUsername.text = user.email.substringBefore("@").ifBlank { "Ultra User" }
             binding.tvEmail.text = user.email
             binding.tvStatus.text =
-                if (user.isApproved && user.licenseStatus == "approved") {
+                if (user.isApproved && user.licenseStatus.equals("approved", ignoreCase = true)) {
+                    binding.tvStatus.setTextColor(getColor(R.color.primary))
+                    binding.dotStatus.setBackgroundResource(R.drawable.bg_status_green)
+                    statusPulse?.cancel()
                     "Approved"
                 } else {
+                    binding.tvStatus.setTextColor(getColor(R.color.warning))
+                    binding.dotStatus.setBackgroundResource(R.drawable.bg_status_orange)
+                    statusPulse = ObjectAnimator.ofFloat(binding.dotStatus, View.ALPHA, 1.0f, 0.35f).apply {
+                        repeatMode = ValueAnimator.REVERSE
+                        repeatCount = ValueAnimator.INFINITE
+                        duration = 900L
+                        start()
+                    }
                     "Awaiting administrator approval"
                 }
-            binding.tvPlan.text = if (user.isAdmin) "Administrator" else "Ultra AutoDetector"
         }
     }
 
     private fun setupClicks() {
         binding.btnToggleDetection.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             when {
                 !PermissionHelper.hasOverlayPermission(this) -> {
                     showPermissionGuideDialog(isOverlay = true)
@@ -116,6 +154,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnLogout.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             OverlayManager.hideOverlay()
             stopDetectionService()
             lifecycleScope.launch {
@@ -126,17 +165,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupAdminAccess() {
-        LogoTapAccessGesture.attach(
-            view = binding.logoAccessTarget,
-            onHoldStart = {
-                Toast.makeText(this, "Hold 6 sec for admin...", Toast.LENGTH_SHORT).show()
-            },
-            onTrigger = {
+        var count = 0
+        var lastTime = 0L
+        binding.logoAccessTarget.setOnClickListener {
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastTime > ADMIN_TAP_WINDOW_MS) count = 0
+            lastTime = now
+            count += 1
+            Toast.makeText(this, "$count/6", Toast.LENGTH_SHORT).show()
+            if (count == ADMIN_TAP_COUNT) {
+                count = 0
                 vibrateAdminAccess()
-                Toast.makeText(this, "Admin opening...", Toast.LENGTH_SHORT).show()
-                openAdminPanel()
-            },
-        )
+                lifecycleScope.launch {
+                    authRepo.loginAdmin()
+                        .onSuccess {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Admin opening...",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            openAdminPanel()
+                        }
+                        .onFailure {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Administrator access unavailable",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                }
+            }
+        }
     }
 
     private fun toggleDetection() {
@@ -294,7 +353,17 @@ class MainActivity : AppCompatActivity() {
         finish()
     }
 
+    override fun onDestroy() {
+        logoPulse?.cancel()
+        statusPulse?.cancel()
+        logoPulse = null
+        statusPulse = null
+        super.onDestroy()
+    }
+
     companion object {
+        private const val ADMIN_TAP_COUNT = 6
+        private const val ADMIN_TAP_WINDOW_MS = 2_000L
         private const val SETTINGS_DELAY_MS = 500L
         private const val REQUEST_OVERLAY_PERMISSION = 1001
     }
