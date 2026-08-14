@@ -1,304 +1,210 @@
 package com.ultra.autodetector.service
 
-import android.accessibilityservice.AccessibilityService
-import android.app.Activity
-import android.app.PendingIntent
+import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
-import android.os.Handler
-import android.os.HandlerThread
 import android.os.IBinder
 import android.os.SystemClock
-import android.util.Log
-import android.view.accessibility.AccessibilityEvent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.Worker
-import androidx.work.WorkerParameters
 import com.ultra.autodetector.R
 import com.ultra.autodetector.UltraAutoDetectorApp
-import com.ultra.autodetector.detector.BuiltInTemplateManager
-import com.ultra.autodetector.detector.FastClicker
-import com.ultra.autodetector.detector.ScreenCapture
+import com.ultra.autodetector.data.local.ActionEntity
+import com.ultra.autodetector.data.local.AppDatabase
+import com.ultra.autodetector.data.local.LogEntity
+import com.ultra.autodetector.detector.ImageDetector
 import com.ultra.autodetector.ui.main.MainActivity
-import org.opencv.android.Utils
-import org.opencv.core.Core
-import org.opencv.core.Mat
-import org.opencv.core.Size
-import org.opencv.imgproc.Imgproc
-import java.util.concurrent.atomic.AtomicBoolean
+import com.ultra.autodetector.util.OverlayManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
 import kotlin.math.roundToInt
-import java.util.concurrent.TimeUnit
 
-class DetectionService : AccessibilityService() {
+class DetectionService : Service() {
     companion object {
-        private const val TAG = "DetectionService"
-        private const val NOTIFICATION_ID = 101
-        private const val SCAN_INTERVAL_MS = 180L
-        private const val CLICK_COOLDOWN_MS = 800L
-        private val SCALES = doubleArrayOf(0.75, 0.90, 1.0, 1.10)
         const val ACTION_START = "com.ultra.autodetector.action.START"
         const val ACTION_STOP = "com.ultra.autodetector.action.STOP"
-        const val ACTION_RESTART = "com.ultra.autodetector.action.RESTART"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
+        const val EXTRA_INTERVAL_MS = "interval_ms"
+        const val ACTION_STOP_DETECTION = "com.ultra.autodetector.action.STOP_DETECTION"
+        const val ACTION_PUSH_CLICKED = "com.ultra.autodetector.action.PUSH_CLICKED"
+        private const val NOTIFICATION_ID = 101
+        private const val DEFAULT_INTERVAL_MS = 500L
+        private const val COOLDOWN_MS = 900L
 
         @Volatile
-        var isRunning = false
+        var isRunning: Boolean = false
             private set
     }
 
-    private lateinit var templates: BuiltInTemplateManager
-    private lateinit var capture: ScreenCapture
-    private lateinit var clicker: FastClicker
-    private lateinit var detectorThread: HandlerThread
-    private lateinit var detectorHandler: Handler
-    private val analyzing = AtomicBoolean(false)
-    private val frameLock = Any()
-    private var latestFrame: Bitmap? = null
-    private var frameInUse: Bitmap? = null
-    private var pendingResultCode = Activity.RESULT_CANCELED
-    private var pendingResultData: Intent? = null
-    private var connected = false
-    private var stopping = false
-    private var lastClickAt = 0L
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var scanJob: Job? = null
+    private var lastActionAt = 0L
+    private var intervalMs = DEFAULT_INTERVAL_MS
+    private lateinit var database: AppDatabase
+    private val settings by lazy {
+        getSharedPreferences("detector_settings", Context.MODE_PRIVATE)
+    }
 
-    override fun onCreate() {
-        super.onCreate()
-        detectorThread = HandlerThread("DetectorThread", android.os.Process.THREAD_PRIORITY_DISPLAY)
-        detectorThread.start()
-        detectorHandler = Handler(detectorThread.looper)
-        capture = ScreenCapture(this, detectorHandler)
-        clicker = FastClicker(this, detectorHandler)
-        detectorHandler.post {
-            if (!application.ensureOpenCvLoaded()) {
-                Log.e(TAG, "OpenCV failed to initialize")
-                return@post
+    private val overlayReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ACTION_STOP_DETECTION -> stopDetection()
+                ACTION_PUSH_CLICKED -> log("Overlay PUSH clicked")
             }
-            templates = BuiltInTemplateManager(this).also { it.onCreate() }
         }
     }
 
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        connected = true
-        startCaptureIfReady()
-        Log.i(TAG, "Accessibility detector connected")
+    override fun onCreate() {
+        super.onCreate()
+        database = AppDatabase.getInstance(this)
+        val filter = IntentFilter().apply {
+            addAction(ACTION_STOP_DETECTION)
+            addAction(ACTION_PUSH_CLICKED)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(overlayReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(overlayReceiver, filter)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> {
-                stopping = false
-                pendingResultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
-                pendingResultData = intent.parcelableExtra(EXTRA_RESULT_DATA)
-                startCaptureIfReady()
-            }
-            ACTION_STOP -> {
-                stopping = true
-                stopDetection()
-                stopSelf()
-            }
-            ACTION_RESTART -> {
-                stopping = false
-                startCaptureIfReady()
-            }
+            ACTION_STOP, ACTION_STOP_DETECTION -> stopDetection()
+            ACTION_START -> startDetection(intent)
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
-    private fun startCaptureIfReady() {
-        if (!connected || pendingResultData == null || pendingResultCode != Activity.RESULT_OK) return
-        if (!::templates.isInitialized) {
-            detectorHandler.removeCallbacks(templateReadyRetry)
-            detectorHandler.postDelayed(templateReadyRetry, 40L)
-            return
-        }
-        val started = runCatching {
-            capture.start(
-                pendingResultCode,
-                pendingResultData!!,
-                onBeforeDisplay = ::startForegroundServiceNotification,
-            ) { frame ->
-                synchronized(frameLock) {
-                    val old = latestFrame
-                    latestFrame = frame
-                    if (old != null && old !== frame && old !== frameInUse && !old.isRecycled) {
-                        old.recycle()
-                    }
-                }
+    private fun startDetection(intent: Intent) {
+        if (isRunning) return
+        intervalMs = intent.getLongExtra(EXTRA_INTERVAL_MS, DEFAULT_INTERVAL_MS)
+            .coerceIn(100L, 2000L)
+        startForegroundNotification()
+        isRunning = true
+        OverlayManager.showOverlay(this, true)
+        val captureIntent = Intent(this, ScreenCaptureService::class.java)
+            .setAction(ScreenCaptureService.ACTION_START)
+            .putExtra(
+                ScreenCaptureService.EXTRA_RESULT_CODE,
+                intent.getIntExtra(EXTRA_RESULT_CODE, 0),
+            )
+            .putExtra(
+                ScreenCaptureService.EXTRA_RESULT_DATA,
+                intent.getParcelableExtraCompat<Intent>(EXTRA_RESULT_DATA),
+            )
+            .putExtra(ScreenCaptureService.EXTRA_INTERVAL_MS, intervalMs)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(captureIntent)
+            } else {
+                startService(captureIntent)
             }
-        }.getOrElse {
-            Log.e(TAG, "MediaProjection setup failed", it)
-            false
+        }.onFailure { error ->
+            log("Screen capture failed to start: ${error.message}", "ERROR")
+            stopDetection()
         }
-        if (started) {
-            detectorHandler.removeCallbacks(scanRunnable)
-            detectorHandler.post(scanRunnable)
-            isRunning = true
-        } else {
-            Log.e(TAG, "MediaProjection failed; accessibility fallback remains available")
-            isRunning = false
+        scanJob?.cancel()
+        scanJob = scope.launch {
+            while (isActive && isRunning) {
+                scanOnce()
+                delay(intervalMs)
+            }
         }
+        log("Detection started with ${intervalMs}ms capture interval")
     }
 
-    private val templateReadyRetry = Runnable {
-        if (!stopping) startCaptureIfReady()
-    }
-
-    private val scanRunnable = object : Runnable {
-        override fun run() {
-            analyzeLatestFrame()
-            if (isRunning) detectorHandler.postDelayed(this, SCAN_INTERVAL_MS)
-        }
-    }
-
-    private fun analyzeLatestFrame() {
-        if (!analyzing.compareAndSet(false, true)) return
-        val frame = synchronized(frameLock) {
-            latestFrame?.also { frameInUse = it }
-        }
-        if (frame == null) {
-            analyzing.set(false)
-            return
-        }
-        val startedAt = SystemClock.uptimeMillis()
-        val screenRgba = Mat()
-        val screenGray = Mat()
+    private suspend fun scanOnce() {
+        val screen = ScreenCaptureService.currentFrame() ?: return
         try {
-            Utils.bitmapToMat(frame, screenRgba)
-            Imgproc.cvtColor(screenRgba, screenGray, Imgproc.COLOR_RGBA2GRAY)
-            var best: Detection? = null
-
-            templates.getAllTemplates().filter { it.isActive }.forEach { template ->
-                SCALES.forEach { scale ->
-                    val scaledWidth = (template.matGray.cols() * scale).roundToInt()
-                    val scaledHeight = (template.matGray.rows() * scale).roundToInt()
-                    if (scaledWidth < 2 || scaledHeight < 2 ||
-                        scaledWidth > screenGray.cols() || scaledHeight > screenGray.rows()
-                    ) return@forEach
-
-                    val scaled = Mat()
-                    val result = Mat()
-                    try {
-                        Imgproc.resize(
-                            template.matGray,
-                            scaled,
-                            Size(scaledWidth.toDouble(), scaledHeight.toDouble()),
-                        )
-                        Imgproc.matchTemplate(screenGray, scaled, result, Imgproc.TM_CCOEFF_NORMED)
-                        val match = Core.minMaxLoc(result)
-                        if (match.maxVal >= templates.thresholdFor(template.id) &&
-                            (best == null || match.maxVal > best!!.confidence)
-                        ) {
-                            best = Detection(
-                                template = template,
-                                confidence = match.maxVal,
-                                left = match.maxLoc.x.roundToInt(),
-                                top = match.maxLoc.y.roundToInt(),
-                                width = scaledWidth,
-                                height = scaledHeight,
-                            )
-                        }
-                    } finally {
-                        scaled.release()
-                        result.release()
-                    }
-                }
-            }
-
-            best?.let { found ->
-                val now = SystemClock.elapsedRealtime()
-                if (now - lastClickAt >= CLICK_COOLDOWN_MS) {
-                    val x = (found.left + found.width / 2f) *
-                        capture.realScreenWidth / capture.capturedWidth
-                    val y = (found.top + found.height / 2f) *
-                        capture.realScreenHeight / capture.capturedHeight
-                    lastClickAt = now
-                    performFastClick(x, y)
-                    publishOverlay(found)
-                    Log.i(
-                        TAG,
-                        "FOUND ${found.template.name} at ${x.roundToInt()},${y.roundToInt()} " +
-                        "Confidence: ${"%.2f".format(found.confidence)} in " +
-                        "${SystemClock.uptimeMillis() - startedAt}ms -> CLICKED",
-                    )
+            if (!settings.getBoolean("global_enabled", true)) return
+            val templates = withContext(Dispatchers.IO) { database.templateDao().getEnabled() }
+            for (template in templates) {
+                val bitmap = BitmapFactory.decodeFile(template.imagePath) ?: continue
+                try {
+                    val match = ImageDetector.findImageResult(bitmap, screen, template.threshold)
+                        ?: continue
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastActionAt < COOLDOWN_MS) continue
+                    lastActionAt = now
+                    val centerX = match.point.x.roundToInt() + match.width / 2
+                    val centerY = match.point.y.roundToInt() + match.height / 2
+                    executeAction(template.id, template.name, centerX, centerY, match.confidence)
+                } finally {
+                    bitmap.recycle()
                 }
             }
         } catch (error: Throwable) {
-            Log.e(TAG, "Detection frame failed", error)
+            log("Detection scan failed: ${error.message}", "ERROR")
         } finally {
-            screenRgba.release()
-            screenGray.release()
-            analyzing.set(false)
-            synchronized(frameLock) {
-                if (frameInUse === frame) frameInUse = null
-                if (latestFrame !== frame && !frame.isRecycled) frame.recycle()
-            }
+            screen.recycle()
         }
     }
 
-    private fun performFastClick(x: Float, y: Float) {
-        clicker.doubleClick(x, y)
-    }
-
-    private fun publishOverlay(found: Detection) {
-        startService(
-            Intent(FloatingOverlayService.ACTION_RESULT)
-                .setClass(this, FloatingOverlayService::class.java)
-                .setPackage(packageName)
-                .putExtra(FloatingOverlayService.EXTRA_LEFT, found.left * capture.realScreenWidth / capture.capturedWidth)
-                .putExtra(FloatingOverlayService.EXTRA_TOP, found.top * capture.realScreenHeight / capture.capturedHeight)
-                .putExtra(FloatingOverlayService.EXTRA_WIDTH, found.width * capture.realScreenWidth / capture.capturedWidth)
-                .putExtra(FloatingOverlayService.EXTRA_HEIGHT, found.height * capture.realScreenHeight / capture.capturedHeight),
+    private suspend fun executeAction(
+        templateId: String,
+        templateName: String,
+        centerX: Int,
+        centerY: Int,
+        confidence: Float,
+    ) {
+        val action = withContext(Dispatchers.IO) { database.actionDao().getForTemplate(templateId) }
+            ?: ActionEntity(templateId = templateId)
+        val performed = when (action.actionType.uppercase(Locale.US)) {
+            ActionEntity.TYPE_SWIPE -> performSwipeAction(action.parameters, centerX, centerY)
+            else -> AutoDetectorService.performClick(centerX, centerY)
+        }
+        log(
+            message = if (performed) {
+                "Matched $templateName and executed ${action.actionType}"
+            } else {
+                "Matched $templateName but accessibility gesture was unavailable"
+            },
+            templateName = templateName,
+            confidence = confidence,
+            x = centerX,
+            y = centerY,
+            level = if (performed) "INFO" else "WARN",
         )
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (isRunning) return
-        if (!::templates.isInitialized) return
-        val root = rootInActiveWindow ?: return
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastClickAt < CLICK_COOLDOWN_MS) return
-        templates.getAllTemplates().filter { it.isActive }.forEach { template ->
-            val nodes = root.findAccessibilityNodeInfosByText(template.name)
-            val node = nodes.firstOrNull() ?: return@forEach
-            if (clicker.doubleClick(node)) {
-                lastClickAt = now
-                Log.i(TAG, "Accessibility fallback double-clicked ${template.name}")
-                return
-            }
+    private fun performSwipeAction(parameters: String, x: Int, y: Int): Boolean {
+        val values = parameters.split(',').mapNotNull { it.trim().toIntOrNull() }
+        return if (values.size == 4) {
+            AutoDetectorService.performSwipe(values[0], values[1], values[2], values[3])
+        } else {
+            AutoDetectorService.performSwipe(x, y, x, (y - 400).coerceAtLeast(0))
         }
     }
 
-    private fun stopDetection() {
-        isRunning = false
-        detectorHandler.removeCallbacks(scanRunnable)
-        capture.stop()
-        synchronized(frameLock) {
-            val old = latestFrame
-            latestFrame = null
-            if (old != null && old !== frameInUse && !old.isRecycled) old.recycle()
-        }
-    }
-
-    private fun startForegroundServiceNotification() {
+    private fun startForegroundNotification() {
         val notification = NotificationCompat.Builder(this, UltraAutoDetectorApp.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("AutoDetector Running")
-            .setContentText("${templates.getAllTemplates().count { it.isActive }} Templates Active")
+            .setContentTitle("ULTRA Active")
+            .setContentText("Image detection is running")
             .setOngoing(true)
             .setContentIntent(
-                PendingIntent.getActivity(
+                android.app.PendingIntent.getActivity(
                     this,
-                    11,
+                    101,
                     Intent(this, MainActivity::class.java),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                        android.app.PendingIntent.FLAG_IMMUTABLE,
                 ),
             )
             .build()
@@ -307,56 +213,64 @@ class DetectionService : AccessibilityService() {
                 this,
                 NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
     }
 
-    override fun onInterrupt() = Unit
+    private fun stopDetection() {
+        scanJob?.cancel()
+        scanJob = null
+        if (isRunning) log("Detection stopped")
+        isRunning = false
+        OverlayManager.hideOverlay()
+        stopService(Intent(this, ScreenCaptureService::class.java).setAction(ScreenCaptureService.ACTION_STOP))
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    private fun log(
+        message: String,
+        level: String = "INFO",
+        templateName: String? = null,
+        confidence: Float? = null,
+        x: Int? = null,
+        y: Int? = null,
+    ) {
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                database.logDao().insert(
+                    LogEntity(
+                        level = level,
+                        message = message,
+                        templateName = templateName,
+                        confidence = confidence,
+                        x = x,
+                        y = y,
+                    ),
+                )
+            }
+        }
+    }
 
     override fun onDestroy() {
-        stopDetection()
-        clicker.close()
-        if (::templates.isInitialized) templates.close()
-        detectorThread.quitSafely()
-        if (!stopping) {
-            WorkManager.getInstance(this).enqueue(
-                OneTimeWorkRequestBuilder<AutoDetectorRestartWorker>()
-                    .setInitialDelay(5, TimeUnit.SECONDS)
-                    .build(),
-            )
-        }
+        runCatching { unregisterReceiver(overlayReceiver) }
+        isRunning = false
+        scanJob?.cancel()
+        OverlayManager.hideOverlay()
+        scope.cancel()
         super.onDestroy()
     }
 
-    private val application: UltraAutoDetectorApp
-        get() = getApplication() as UltraAutoDetectorApp
-
-    private data class Detection(
-        val template: BuiltInTemplateManager.Template,
-        val confidence: Double,
-        val left: Int,
-        val top: Int,
-        val width: Int,
-        val height: Int,
-    )
-}
-
-class AutoDetectorRestartWorker(
-    appContext: Context,
-    workerParams: WorkerParameters,
-) : Worker(appContext, workerParams) {
-    override fun doWork(): Result {
-        val intent = Intent(applicationContext, DetectionService::class.java)
-            .setAction(DetectionService.ACTION_RESTART)
-        runCatching { applicationContext.startService(intent) }
-        return Result.success()
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 }
 
 @Suppress("DEPRECATION")
-private inline fun <reified T : android.os.Parcelable> Intent.parcelableExtra(key: String): T? =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) getParcelableExtra(key, T::class.java)
-    else getParcelableExtra(key)
+private inline fun <reified T : android.os.Parcelable> Intent.getParcelableExtraCompat(key: String): T? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getParcelableExtra(key, T::class.java)
+    } else {
+        getParcelableExtra(key)
+    }

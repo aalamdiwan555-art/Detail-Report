@@ -10,51 +10,85 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical">
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_back"
+            android:id="@+id/btnBack"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:foreground="?attr/selectableItemBackground"
             android:text="Back" />
         <TextView
-            android:id="@+id/admin_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="USER APPROVAL"
+            android:text="ULTRA ADMIN"
             android:textColor="@android:color/white"
             android:textStyle="bold" />
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_logout_admin"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Logout"
-            android:textColor="@color/error" />
     </LinearLayout>
-    <com.google.android.material.textfield.TextInputLayout
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/globalEnableSwitch"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:hint="Search users">
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/user_search"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="textEmailAddress" />
-    </com.google.android.material.textfield.TextInputLayout>
+        android:text="Global detection enabled"
+        android:textColor="@android:color/white" />
+    <TextView
+        android:id="@+id/intervalLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="Capture interval: 500 ms"
+        android:textColor="@color/muted" />
+    <SeekBar
+        android:id="@+id/intervalSeekBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="19"
+        android:progress="4" />
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_clear_pending"
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:id="@+id/btnAddTemplate"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="CLEAR PENDING ACCOUNTS"
+        android:foreground="?attr/selectableItemBackground"
+        android:text="ADD SCREENSHOT TEMPLATE" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnExportLogs"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:foreground="?attr/selectableItemBackground"
+            android:text="EXPORT LOGS" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOpenLogs"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:foreground="?attr/selectableItemBackground"
+            android:text="VIEW LOGS" />
+    </LinearLayout>
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnClearData"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:foreground="?attr/selectableItemBackground"
+        android:text="CLEAR ALL DETECTOR DATA"
         android:textColor="@color/error" />
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/users_list"
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
+        <LinearLayout
+            android:id="@+id/templatesContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
 </LinearLayout>

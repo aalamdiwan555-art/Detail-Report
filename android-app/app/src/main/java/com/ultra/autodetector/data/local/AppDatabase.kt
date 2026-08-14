@@ -6,13 +6,22 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [UserEntity::class, NoticeEntity::class],
-    version = 5,
+    entities = [
+        UserEntity::class,
+        NoticeEntity::class,
+        TemplateEntity::class,
+        ActionEntity::class,
+        LogEntity::class,
+    ],
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun noticeDao(): NoticeDao
+    abstract fun templateDao(): TemplateDao
+    abstract fun actionDao(): ActionDao
+    abstract fun logDao(): LogDao
 
     companion object {
         private const val DATABASE_NAME = "ultra_auto_detector_v2.db"

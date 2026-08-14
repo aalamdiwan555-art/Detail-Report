@@ -10,10 +10,10 @@ android {
 
     defaultConfig {
         applicationId = "com.ultra.autodetector"
-        minSdk = 26
+        minSdk = 24
         targetSdk = 34
         versionCode = 2
-        versionName = "2.0.0-fixed"
+        versionName = "1.0.0"
     }
 
     buildTypes {
@@ -73,5 +73,6 @@ dependencies {
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.google.mlkit:text-recognition:16.0.1")
-    implementation("org.opencv:opencv:4.10.0")
+    // OpenCV 4.9.0 is published on Maven Central under this official Android coordinate.
+    implementation("org.opencv:opencv:4.9.0")
 }

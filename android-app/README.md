@@ -1,63 +1,46 @@
-# Ultra AutoDetector Android App
+# ULTRA AUTO DETECTOR
 
-Native Kotlin Android implementation of the local, self-hosted blueprint.
+Native Kotlin Android app with package `com.ultra.autodetector`.
 
-## Included
+## Product flow
 
-- XML activities for authentication, detector controls, and admin approval.
-- Room database for users and local approval notices only.
-- Permanent built-in image templates loaded from
-  `app/src/main/assets/templates/`.
-- Encrypted session metadata with app-private built-in template storage.
-- Pending/approved/rejected/expired/lifetime license handling.
-- Admin actions for 1, 2, or 3 days, lifetime, and rejection.
-- Explicit AccessibilityService, overlay, and MediaProjection permission flow.
-- Foreground screen capture, OpenCV normalized-correlation matching at multiple
-  scales, and user-requested accessibility gestures.
-- Optional red detection rectangle overlay.
+- Main screen keeps the 200dp × 80dp `logo_access_target` and a live START/STOP
+  detection control.
+- A six-second hold on the ULTRA logo opens the admin panel through
+  `AuthRepository.loginAdmin()`.
+- Admins can add screenshots to `files/templates/`, edit names, set the
+  0.50–0.95 confidence threshold, enable/disable templates, choose click or
+  swipe actions, clear local data, and export logs.
+- Detection requires Android overlay, accessibility, notification, and
+  MediaProjection consent. Detection runs only after the user explicitly starts
+  it.
+- The center overlay is draggable, has a green PUSH state, and its close button
+  sends `STOP_DETECTION`.
 
-## Local mode
+## Native architecture
 
-This build is fully offline and does not import Firebase or require a cloud
-service. Data is private to the Android app sandbox and does not synchronize
-between devices.
-
-New accounts are pending until an administrator approves them. Passwords are
-stored as salted SHA-256 hashes in the local Room database and the current
-session is stored in Android `EncryptedSharedPreferences`.
-
-Visible login and sign-up are user-only. Administrator access is a local
-passwordless mode available after tapping the `ULTRA` logo six times. Anyone
-with access to the device can enter this panel; this mode is not suitable for
-production. Administrators approve users; they cannot upload or delete
-templates.
+- `DetectionService` — foreground orchestration service, notification channel
+  `ULTRA Active`, configurable 100–2000ms scan interval, logging, and action
+  dispatch.
+- `ScreenCaptureService` — MediaProjection capture service with a 500ms default
+  frame cadence.
+- `AutoDetectorService` — accessibility gesture executor for clicks and swipes.
+- `ImageDetector` — OpenCV `TM_CCOEFF_NORMED` matcher with the required
+  `findImage(template, screen, threshold): Point?` API.
+- Room `AppDatabase` — `TemplateEntity`, `ActionEntity`, `LogEntity`, plus the
+  imported local account tables.
+- `OverlayManager` — singleton `TYPE_APPLICATION_OVERLAY` PUSH/START control.
 
 ## Build
 
-From a machine with Android SDK platform 35 and build tools installed:
+The app targets SDK 34, compiles with SDK 35, and supports min SDK 24:
 
 ```bash
-./gradlew assembleDebug --no-daemon
+./gradlew :app:assembleDebug
 ```
 
-The debug APK is written to
-`app/build/outputs/apk/debug/app-debug.apk`. The GitHub Actions workflow also
-uploads that file as `ultra-auto-detector-debug-apk` after every Android build
-attempt. The project targets Android API 34 and compiles against platform 35;
-the machine running the command must have Android SDK platform 35 and build
-tools 35.0.0 installed.
+The APK is written to
+`app/build/outputs/apk/debug/app-debug.apk`.
 
-On the first authenticated visit for each local user, a full-screen setup gate
-requires Accessibility, Draw Over Other Apps, and notification access. Start
-and Stop remain hidden until this setup is complete. The Start button then
-opens the MediaProjection consent flow for the current session.
-
-Regular users cannot view the built-in template gallery. The gallery remains
-available to administrators after they tap the visible ULTRA logo six times.
-
-## Safety boundary
-
-Screen capture and gesture dispatch begin only after explicit user actions and
-Android permission grants. Detection is bounded to the locally imported
-templates. The app does not discover target apps, hide gestures, or attempt to
-bypass anti-bot or security controls.
+OpenCV 4.9.0 is consumed from Maven Central using its published Android
+coordinate `org.opencv:opencv:4.9.0`.

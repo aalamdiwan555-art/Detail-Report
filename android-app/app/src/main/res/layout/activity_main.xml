@@ -12,167 +12,63 @@
         android:orientation="vertical"
         android:padding="20dp">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <!-- Compact logo with a forgiving six-tap touch area -->
-            <FrameLayout
-                android:id="@+id/logo_access_target"
-                android:layout_width="104dp"
-                android:layout_height="52dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="ULTRA logo">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="4dp">
-
-                    <ImageView
-                        android:id="@+id/logo_mark"
-                        android:layout_width="30dp"
-                        android:layout_height="30dp"
-                        android:contentDescription="@null"
-                        android:src="@drawable/logo_mark" />
-                    <TextView
-                        android:id="@+id/logo_text"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:text="ULTRA"
-                        android:textColor="@color/primary"
-                        android:textSize="15sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.4" />
-                </LinearLayout>
-            </FrameLayout>
-
-            <Space
-                android:layout_width="12dp"
-                android:layout_height="1dp" />
-            <View
-                android:id="@+id/status_dot"
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:background="@drawable/bg_status_red" />
+        <FrameLayout
+            android:id="@+id/logo_access_target"
+            android:layout_width="200dp"
+            android:layout_height="80dp"
+            android:layout_gravity="center_horizontal"
+            android:background="#10FF0000"
+            android:clickable="true"
+            android:contentDescription="ULTRA logo. Hold for six seconds for administrator access."
+            android:focusable="true">
             <TextView
-                 android:id="@+id/tvStatus"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:layout_weight="1"
-                 android:ellipsize="end"
-                 android:gravity="center"
-                 android:maxLines="1"
-                 android:singleLine="true"
-                android:text="STOPPED"
-                android:textColor="@android:color/white"
-                android:textSize="22sp"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:letterSpacing="0.18"
+                android:text="ULTRA"
+                android:textColor="@color/primary"
+                android:textSize="30sp"
                 android:textStyle="bold" />
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_logout"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Logout"
-                android:textColor="@color/error" />
-        </LinearLayout>
+        </FrameLayout>
 
         <TextView
-            android:id="@+id/account_email"
+            android:id="@+id/tvDetectionState"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="@color/muted"
-            android:textSize="13sp" />
-        <TextView
-            android:id="@+id/account_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/primary"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/account_details_label"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="ACCOUNT DETAILS"
-            android:textColor="@color/primary"
-            android:textSize="11sp"
+            android:layout_marginTop="22dp"
+            android:gravity="center"
+            android:text="DETECTOR READY"
+            android:textColor="@android:color/white"
+            android:textSize="22sp"
             android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/account_details"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnToggleDetection"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/muted"
-            android:textSize="12sp" />
+            android:layout_height="60dp"
+            android:layout_marginTop="16dp"
+            android:foreground="?attr/selectableItemBackground"
+            android:text="START DETECTION"
+            android:textColor="@color/ink"
+            android:textStyle="bold"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="16dp" />
 
         <TextView
-            android:id="@+id/detector_status"
+            android:id="@+id/tvPermissionSummary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
-            android:text="Ready"
-            android:textColor="@android:color/white"
-            android:textSize="14sp" />
+            android:text="Checking permissions..."
+            android:textColor="@color/muted"
+            android:textSize="13sp" />
 
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/show_overlay_switch"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:checked="true"
-            android:enabled="false"
-            android:text="Detection overlay"
-            android:textColor="@android:color/white" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="PERMISSIONS"
-            android:textColor="@color/primary"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:orientation="vertical">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical">
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Accessibility"
-                    android:textColor="@android:color/white" />
-                <TextView
-                    android:id="@+id/accessibility_status"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Required"
-                    android:textColor="@color/error" />
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_accessibility"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Grant" />
-            </LinearLayout>
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -184,16 +80,43 @@
                     android:text="Draw over other apps"
                     android:textColor="@android:color/white" />
                 <TextView
-                    android:id="@+id/overlay_status"
+                    android:id="@+id/tvOverlayStatus"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
                     android:text="Required"
                     android:textColor="@color/error" />
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_overlay"
+                    android:id="@+id/btnOverlayPermission"
                     style="@style/Widget.MaterialComponents.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:text="Grant" />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Accessibility gestures"
+                    android:textColor="@android:color/white" />
+                <TextView
+                    android:id="@+id/tvAccessibilityStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="Required"
+                    android:textColor="@color/error" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAccessibilityPermission"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:foreground="?attr/selectableItemBackground"
                     android:text="Grant" />
             </LinearLayout>
             <LinearLayout
@@ -207,34 +130,37 @@
                     android:text="Notifications"
                     android:textColor="@android:color/white" />
                 <TextView
-                    android:id="@+id/notification_status"
+                    android:id="@+id/tvNotificationStatus"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Required"
-                    android:textColor="@color/error" />
+                    android:layout_marginEnd="8dp"
+                    android:text="Recommended"
+                    android:textColor="@color/muted" />
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_notifications"
+                    android:id="@+id/btnNotificationsPermission"
                     style="@style/Widget.MaterialComponents.Button.TextButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:foreground="?attr/selectableItemBackground"
                     android:text="Grant" />
             </LinearLayout>
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/detector_controls"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnManageTemplates"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_start_detection"
-                android:layout_width="match_parent"
-                android:layout_height="58dp"
-                android:layout_marginTop="22dp"
-                android:text="START DETECTION"
-                android:textColor="@color/ink"
-                app:backgroundTint="@color/primary"
-                app:cornerRadius="16dp" />
-        </LinearLayout>
+            android:layout_marginTop="22dp"
+            android:foreground="?attr/selectableItemBackground"
+            android:text="MANAGE TEMPLATES" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnViewLogs"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:foreground="?attr/selectableItemBackground"
+            android:text="VIEW DETECTION LOGS" />
     </LinearLayout>
 </ScrollView>

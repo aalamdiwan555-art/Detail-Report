@@ -1,397 +1,191 @@
 package com.ultra.autodetector.ui.main
 
+import android.Manifest
 import android.app.Activity
-import android.app.Dialog
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.provider.Settings
-import android.view.View
-import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.ultra.autodetector.R
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.databinding.ActivityMainBinding
 import com.ultra.autodetector.service.DetectionService
-import com.ultra.autodetector.service.FloatingOverlayService
 import com.ultra.autodetector.ui.admin.AdminActivity
-import com.ultra.autodetector.ui.auth.AuthActivity
-import com.ultra.autodetector.util.BackgroundPermissionHelper
+import com.ultra.autodetector.ui.logs.LogsActivity
 import com.ultra.autodetector.util.LogoTapAccessGesture
+import com.ultra.autodetector.util.OverlayManager
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
-    companion object {
-        private const val REQUEST_NOTIFICATIONS = 7001
-        private const val REQUEST_CODE_SCREEN = 7002
-        private const val PREFS_PERMISSIONS = "ultra_permission_preferences"
-        private const val KEY_FIRST_LAUNCH_DONE = "first_launch_done"
-    }
-
     private lateinit var binding: ActivityMainBinding
     private val auth by lazy { AuthRepository(this) }
-    private val permissionPrefs by lazy {
-        getSharedPreferences(PREFS_PERMISSIONS, MODE_PRIVATE)
-    }
-    private var mediaProjectionPermissionGranted = false
-    private var projectionData: Intent? = null
-    private var permissionDialog: Dialog? = null
-    private var adminAccessInProgress = false
-    private var detectionStartRequested = false
+    private val settings by lazy { getSharedPreferences("detector_settings", MODE_PRIVATE) }
+    private var pendingProjection: Intent? = null
+    private val projectionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val data = result.data
+            if (result.resultCode == Activity.RESULT_OK && data != null) {
+                startDetection(result.resultCode, data)
+            } else {
+                binding.tvPermissionSummary.text = "Screen capture permission was cancelled"
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        lifecycleScope.launch {
-            val user = auth.currentUser()
-            if (user == null) {
-                navigateToAuth()
-                return@launch
-            }
-            setupUi()
-        }
-    }
-
-    private fun navigateToAuth() {
-        startActivity(Intent(this, AuthActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        })
-        finish()
+        setupUi()
     }
 
     private fun setupUi() {
-        binding.btnStartDetection.setOnClickListener {
-            if (DetectionService.isRunning || detectionStartRequested) {
-                stopDetector()
-            } else {
-                requestPermissionsAndStart()
+        LogoTapAccessGesture.attach(binding.logoAccessTarget) {
+            Toast.makeText(this, "Admin opening...", Toast.LENGTH_SHORT).show()
+            openAdminPanel()
+        }
+        binding.btnToggleDetection.setOnClickListener {
+            if (DetectionService.isRunning) stopDetection() else beginDetectionSetup()
+        }
+        binding.btnManageTemplates.setOnClickListener { openAdminPanel() }
+        binding.btnViewLogs.setOnClickListener {
+            startActivity(Intent(this, LogsActivity::class.java))
+        }
+        binding.btnOverlayPermission.setOnClickListener { requestOverlayPermission() }
+        binding.btnAccessibilityPermission.setOnClickListener { requestAccessibility() }
+        binding.btnNotificationsPermission.setOnClickListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
             }
-        }
-
-        // SECRET ADMIN - six taps on ULTRA logo (104dp x 52dp touch area)
-        binding.logoAccessTarget.apply {
-            isClickable = true
-            isLongClickable = true
-            LogoTapAccessGesture.attachToHierarchy(this) { openAdminPanel() }
-        }
-
-        binding.btnLogout.setOnClickListener {
-            lifecycleScope.launch {
-                auth.logout()
-                navigateToAuth()
-            }
-        }
-        binding.btnAccessibility.setOnClickListener {
-            startActivity(BackgroundPermissionHelper.accessibilityIntent())
-        }
-        binding.btnOverlay.setOnClickListener {
-            startActivity(BackgroundPermissionHelper.overlayIntent(this))
-        }
-        binding.btnNotifications.setOnClickListener { requestNotificationPermission() }
-        binding.showOverlaySwitch.setOnCheckedChangeListener { _, checked ->
-            if (DetectionService.isRunning && checked) startOverlay()
-            if (DetectionService.isRunning && !checked) startOverlay()
         }
     }
 
     override fun onResume() {
         super.onResume()
-        lifecycleScope.launch {
-            val user = auth.currentUser()
-            if (user == null) {
-                navigateToAuth()
-                return@launch
-            }
-            refreshUi()
-        }
+        refreshPermissions()
+        renderDetectionState()
     }
 
-    override fun onDestroy() {
-        dismissPermissionDialog()
-        super.onDestroy()
-    }
-
-    private fun refreshUi() {
-        lifecycleScope.launch {
-            val user = auth.currentUser()
-            if (user == null) {
-                navigateToAuth()
-                return@launch
+    private fun beginDetectionSetup() {
+        when {
+            !hasOverlayPermission() -> requestOverlayPermission()
+            !hasAccessibilityPermission() -> requestAccessibility()
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED -> {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
             }
-            binding.accountEmail.text = user.email
-            binding.accountStatus.text = if (user.isAdmin) {
-                "Administrator • ${user.remainingLabel()}"
-            } else {
-                "${user.licenseStatus.uppercase()} • ${user.remainingLabel()}"
-            }
-            binding.accountDetails.text =
-                "Account ID: ${user.id}\nDevice: ${user.deviceId.ifBlank { "This device" }}"
-            val permissions = BackgroundPermissionHelper.status(this@MainActivity)
-            binding.detectorControls.visibility = View.VISIBLE
-            updatePermissionUI(permissions)
-            if (!DetectionService.isRunning) {
-                detectionStartRequested = false
-            }
-            renderStatus()
-            if (permissionPrefs.getBoolean(KEY_FIRST_LAUNCH_DONE, false)) {
-                dismissPermissionDialog()
-            } else if (permissionDialog != null) {
-                updatePermissionDialog()
-            } else if (!permissions.mainPermissionsGranted) {
-                showPermissionOnboarding()
-            } else {
-                dismissPermissionDialog()
+            else -> {
+                val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                projectionLauncher.launch(manager.createScreenCaptureIntent())
             }
         }
     }
 
-    private fun updatePermissionUI(permissions: BackgroundPermissionHelper.Status) {
-        binding.accessibilityStatus.text =
-            if (permissions.accessibility) "Granted" else "Not Granted"
-        binding.overlayStatus.text =
-            if (permissions.overlay) "Granted" else "Not Granted"
-        binding.notificationStatus.text =
-            if (permissions.notifications) "Granted" else "Not Granted"
-
-        val grantedColor = getColor(R.color.primary)
-        val errorColor = getColor(R.color.error)
-        binding.accessibilityStatus.setTextColor(if (permissions.accessibility) grantedColor else errorColor)
-        binding.overlayStatus.setTextColor(if (permissions.overlay) grantedColor else errorColor)
-        binding.notificationStatus.setTextColor(if (permissions.notifications) grantedColor else errorColor)
-        binding.btnAccessibility.visibility = if (permissions.accessibility) View.GONE else View.VISIBLE
-        binding.btnOverlay.visibility = if (permissions.overlay) View.GONE else View.VISIBLE
-        binding.btnNotifications.visibility =
-            if (permissions.notifications) View.GONE else View.VISIBLE
-    }
-
-    private fun showPermissionOnboarding() {
-        if (permissionDialog != null) {
-            updatePermissionDialog()
-            return
-        }
-        dismissPermissionDialog()
-        if (isFinishing || isDestroyed) return
-
-        val dialog = Dialog(this)
-        dialog.setContentView(R.layout.dialog_permissions_fullscreen)
-        dialog.setCancelable(false)
-        dialog.setCanceledOnTouchOutside(false)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setDimAmount(0.85f)
-        permissionDialog = dialog
-        dialog.setOnShowListener {
-            dialog.window?.setLayout(
-                android.view.WindowManager.LayoutParams.MATCH_PARENT,
-                android.view.WindowManager.LayoutParams.MATCH_PARENT,
+    private fun startDetection(resultCode: Int, data: Intent) {
+        pendingProjection = data
+        val intent = Intent(this, DetectionService::class.java)
+            .setAction(DetectionService.ACTION_START)
+            .putExtra(DetectionService.EXTRA_RESULT_CODE, resultCode)
+            .putExtra(DetectionService.EXTRA_RESULT_DATA, data)
+            .putExtra(
+                DetectionService.EXTRA_INTERVAL_MS,
+                settings.getLong("interval_ms", 500L).coerceIn(100L, 2000L),
             )
-            updatePermissionDialog()
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ContextCompat.startForegroundService(this, intent)
+            } else {
+                startService(intent)
+            }
+            OverlayManager.showOverlay(this, true)
+            renderDetectionState()
+        }.onFailure {
+            Toast.makeText(
+                this,
+                "Unable to start detection: ${it.message ?: "try again"}",
+                Toast.LENGTH_LONG,
+            ).show()
         }
-        dialog.show()
-        dialog.window?.setLayout(
-            android.view.WindowManager.LayoutParams.MATCH_PARENT,
-            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+    }
+
+    private fun stopDetection() {
+        startService(Intent(this, DetectionService::class.java).setAction(DetectionService.ACTION_STOP))
+        OverlayManager.hideOverlay()
+        renderDetectionState()
+    }
+
+    private fun requestOverlayPermission() {
+        startActivity(
+            Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:$packageName"),
+            ),
         )
-        updatePermissionDialog()
     }
 
-    private fun updatePermissionDialog() {
-        val dialog = permissionDialog ?: return
-        val permissions = BackgroundPermissionHelper.status(this)
-        val statusViews = listOf(
-            R.id.permission_accessibility_status to permissions.accessibility,
-            R.id.permission_overlay_status to permissions.overlay,
-            R.id.permission_notifications_status to permissions.notifications,
-            R.id.permission_battery_status to isIgnoringBatteryOptimizations(),
+    private fun requestAccessibility() {
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
+    private fun hasOverlayPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+
+    private fun hasAccessibilityPermission(): Boolean {
+        val enabled = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ).orEmpty()
+        return enabled.split(':').any {
+            it.equals("$packageName/${packageName}.service.AutoDetectorService", ignoreCase = true)
+        }
+    }
+
+    private fun refreshPermissions() {
+        val overlay = hasOverlayPermission()
+        val accessibility = hasAccessibilityPermission()
+        val notification = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        binding.tvOverlayStatus.text = if (overlay) "Granted" else "Required"
+        binding.tvAccessibilityStatus.text = if (accessibility) "Granted" else "Required"
+        binding.tvNotificationStatus.text = if (notification) "Granted" else "Recommended"
+        binding.btnOverlayPermission.isEnabled = !overlay
+        binding.btnAccessibilityPermission.isEnabled = !accessibility
+        binding.btnNotificationsPermission.isEnabled = !notification
+        binding.tvPermissionSummary.text = when {
+            !overlay -> "Grant overlay access to display the PUSH control."
+            !accessibility -> "Enable ULTRA in Accessibility settings to perform gestures."
+            else -> "Ready. Screen capture permission is requested when detection starts."
+        }
+    }
+
+    private fun renderDetectionState() {
+        val running = DetectionService.isRunning
+        binding.btnToggleDetection.text = if (running) "STOP DETECTION" else "START DETECTION"
+        binding.btnToggleDetection.setBackgroundColor(
+            getColor(if (running) com.ultra.autodetector.R.color.error else com.ultra.autodetector.R.color.primary),
         )
-        statusViews.forEach { (id, granted) ->
-            dialog.findViewById<TextView>(id)?.apply {
-                text = if (granted) "Granted" else "Not Granted"
-                setTextColor(getColor(if (granted) R.color.primary else R.color.error))
-            }
-        }
-
-        dialog.findViewById<MaterialButton>(R.id.btn_permission_accessibility)?.setOnClickListener {
-            startActivity(BackgroundPermissionHelper.accessibilityIntent())
-        }
-        dialog.findViewById<MaterialButton>(R.id.btn_permission_overlay)?.setOnClickListener {
-            startActivity(BackgroundPermissionHelper.overlayIntent(this@MainActivity))
-        }
-        dialog.findViewById<MaterialButton>(R.id.btn_permission_notifications)?.setOnClickListener {
-            requestNotificationPermission()
-        }
-        dialog.findViewById<MaterialButton>(R.id.btn_permission_battery)?.setOnClickListener {
-            runCatching {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        android.net.Uri.parse("package:$packageName"),
-                    ),
-                )
-            }
-        }
-        dialog.findViewById<MaterialButton>(R.id.btn_permission_continue)?.apply {
-            isEnabled = permissions.mainPermissionsGranted
-            setOnClickListener {
-                permissionPrefs.edit().putBoolean(KEY_FIRST_LAUNCH_DONE, true).apply()
-                dismissPermissionDialog()
-            }
-        }
-    }
-
-    private fun dismissPermissionDialog() {
-        permissionDialog?.dismiss()
-        permissionDialog = null
-    }
-
-    private fun renderStatus(runningOverride: Boolean? = null) {
-        val running = runningOverride ?: (DetectionService.isRunning || detectionStartRequested)
-        binding.tvStatus.text = if (running) "RUNNING" else "STOPPED"
-        binding.statusDot.setBackgroundResource(if (running) R.drawable.bg_pulse_green else R.drawable.bg_status_red)
-        binding.btnStartDetection.text = if (running) "STOP DETECTION" else "START DETECTION"
-        binding.btnStartDetection.isEnabled = true
-        binding.btnStartDetection.alpha = 1f
+        binding.tvDetectionState.text = if (running) "ULTRA ACTIVE" else "DETECTOR READY"
+        if (running) OverlayManager.updateState(true)
     }
 
     private fun openAdminPanel() {
-        if (adminAccessInProgress || isFinishing || isDestroyed) return
-        adminAccessInProgress = true
-        binding.logoAccessTarget.isEnabled = false
-
         lifecycleScope.launch {
             auth.loginAdmin()
-                .onSuccess {
-                    startActivity(Intent(this@MainActivity, AdminActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    })
-                    finish()
-                }
-                .onFailure { error ->
-                    adminAccessInProgress = false
-                    binding.logoAccessTarget.isEnabled = true
-                    MaterialAlertDialogBuilder(this@MainActivity)
-                        .setTitle("Administrator access failed")
-                        .setMessage(error.message ?: "Unable to open administrator panel.")
-                        .setPositiveButton("OK", null)
-                        .show()
+                .onSuccess { startActivity(Intent(this@MainActivity, AdminActivity::class.java)) }
+                .onFailure {
+                    Toast.makeText(
+                        this@MainActivity,
+                        it.message ?: "Administrator access failed",
+                        Toast.LENGTH_LONG,
+                    ).show()
                 }
         }
-    }
-
-    private fun requestPermissionsAndStart() {
-        lifecycleScope.launch {
-            val user = auth.currentUser()
-            if (user == null) { navigateToAuth(); return@launch }
-
-            val permissions = BackgroundPermissionHelper.status(this@MainActivity)
-            if (!permissions.mainPermissionsGranted) {
-                if (!permissionPrefs.getBoolean(KEY_FIRST_LAUNCH_DONE, false)) {
-                    showPermissionOnboarding()
-                } else {
-                    when {
-                        !permissions.accessibility ->
-                            startActivity(BackgroundPermissionHelper.accessibilityIntent())
-                        !permissions.overlay ->
-                            startActivity(BackgroundPermissionHelper.overlayIntent(this@MainActivity))
-                        else -> requestNotificationPermission()
-                    }
-                }
-                return@launch
-            }
-
-            if (!user.isAdmin && !user.hasActiveLicense()) {
-                MaterialAlertDialogBuilder(this@MainActivity)
-                    .setTitle("Approval required")
-                    .setMessage("Your account must be approved before detection can start.")
-                    .setPositiveButton("OK", null)
-                    .show()
-                return@launch
-            }
-
-            when {
-                !permissions.accessibility -> startActivity(BackgroundPermissionHelper.accessibilityIntent())
-                !permissions.overlay -> startActivity(BackgroundPermissionHelper.overlayIntent(this@MainActivity))
-                !permissions.notifications -> requestNotificationPermission()
-                else -> requestProjection()
-            }
-        }
-    }
-
-    private fun requestProjection() {
-        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        if (!mediaProjectionPermissionGranted || projectionData == null) {
-            startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_CODE_SCREEN)
-        } else {
-            startDetector()
-        }
-    }
-
-    private fun startDetector() {
-        val data = projectionData ?: return
-        runCatching {
-            ContextCompat.startForegroundService(
-                this,
-                Intent(this, DetectionService::class.java)
-                    .setAction(DetectionService.ACTION_START)
-                    .putExtra(DetectionService.EXTRA_RESULT_CODE, Activity.RESULT_OK)
-                    .putExtra(DetectionService.EXTRA_RESULT_DATA, data),
-            )
-            detectionStartRequested = true
-            binding.showOverlaySwitch.isChecked = true
-            startOverlay()
-            renderStatus()
-        }.onFailure {
-            detectionStartRequested = false
-            binding.detectorStatus.text = "Unable to start detection: ${it.message ?: "try again"}"
-            renderStatus()
-        }
-    }
-
-    private fun stopDetector() {
-        detectionStartRequested = false
-        startService(Intent(this, DetectionService::class.java).setAction(DetectionService.ACTION_STOP))
-        stopService(Intent(this, FloatingOverlayService::class.java))
-        renderStatus(runningOverride = false)
-    }
-
-    @Deprecated("Use the Activity Result API in new screens")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQUEST_CODE_SCREEN) return
-
-        if (resultCode == Activity.RESULT_OK && data != null) {
-            mediaProjectionPermissionGranted = true
-            projectionData = data
-            startDetector()
-        } else {
-            binding.detectorStatus.text = getString(R.string.screen_capture_cancelled)
-        }
-        refreshUi()
-    }
-
-    private fun startOverlay() {
-        if (Settings.canDrawOverlays(this)) {
-            ContextCompat.startForegroundService(this, Intent(this, FloatingOverlayService::class.java))
-        }
-    }
-
-    private fun requestNotificationPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
-        }
-    }
-
-    private fun isIgnoringBatteryOptimizations(): Boolean {
-        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-        return powerManager.isIgnoringBatteryOptimizations(packageName)
     }
 }
