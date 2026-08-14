@@ -93,7 +93,7 @@ class AuthActivity : AppCompatActivity() {
 
         // SECRET ADMIN 6 sec hold - only logo_access_target (safe ID)
         logoTarget?.let { view ->
-            LogoTapAccessGesture.attach(view) { openAdminPanel() }
+            LogoTapAccessGesture.attachToHierarchy(view) { openAdminPanel() }
         }
 
         // Safe fallback via getIdentifier - no compile-time R reference
@@ -104,7 +104,7 @@ class AuthActivity : AppCompatActivity() {
                 if (id != 0) {
                     findViewById<View>(id)?.let {
                         if (it != logoTarget) {
-                            LogoTapAccessGesture.attach(it) { openAdminPanel() }
+                            LogoTapAccessGesture.attachToHierarchy(it) { openAdminPanel() }
                         }
                     }
                 }

@@ -27,7 +27,7 @@ stored as salted SHA-256 hashes in the local Room database and the current
 session is stored in Android `EncryptedSharedPreferences`.
 
 Visible login and sign-up are user-only. Administrator access is a local
-passwordless mode available after tapping the `ULTRA` logo ten times. Anyone
+passwordless mode available after holding the `ULTRA` logo for six seconds. Anyone
 with access to the device can enter this panel; this mode is not suitable for
 production. Administrators approve users; they cannot upload or delete
 templates.
@@ -53,7 +53,7 @@ and Stop remain hidden until this setup is complete. The Start button then
 opens the MediaProjection consent flow for the current session.
 
 Regular users cannot view the built-in template gallery. The gallery remains
-available to administrators after they tap the visible ULTRA logo ten times.
+available to administrators after they hold the visible ULTRA logo for six seconds.
 
 ## Safety boundary
 

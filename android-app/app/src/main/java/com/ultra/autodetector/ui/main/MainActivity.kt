@@ -76,7 +76,7 @@ class MainActivity : AppCompatActivity() {
         binding.logoAccessTarget.apply {
             isClickable = true
             isLongClickable = true
-            LogoTapAccessGesture.attach(this) { openAdminPanel() }
+            LogoTapAccessGesture.attachToHierarchy(this) { openAdminPanel() }
         }
 
         binding.btnLogout.setOnClickListener {
