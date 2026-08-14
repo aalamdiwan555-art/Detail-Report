@@ -2,20 +2,23 @@ package com.ultra.autodetector.ui.main
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
-import android.view.View
+import android.os.Handler
+import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ultra.autodetector.R
-import com.ultra.autodetector.data.model.User
 import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.databinding.ActivityMainBinding
 import com.ultra.autodetector.service.DetectionService
@@ -26,14 +29,14 @@ import com.ultra.autodetector.util.OverlayManager
 import com.ultra.autodetector.util.PermissionHelper
 import kotlinx.coroutines.launch
 
-/**
- * The intentionally small user surface. Templates and logs are admin-only and
- * are never inflated or exposed from this screen.
- */
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
-    private val auth by lazy { AuthRepository(this) }
-    private val settings by lazy { getSharedPreferences("detector_settings", MODE_PRIVATE) }
+    private lateinit var authRepo: AuthRepository
+    private var isDetecting = false
+
+    private val settings by lazy {
+        getSharedPreferences("detector_settings", MODE_PRIVATE)
+    }
 
     private val projectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -41,7 +44,14 @@ class MainActivity : AppCompatActivity() {
             if (result.resultCode == Activity.RESULT_OK && data != null) {
                 startDetection(result.resultCode, data)
             } else {
-                Toast.makeText(this, "Screen capture permission is required to start.", Toast.LENGTH_SHORT).show()
+                OverlayManager.hideOverlay()
+                isDetecting = false
+                updateButton()
+                Toast.makeText(
+                    this,
+                    "Screen capture permission is required to start.",
+                    Toast.LENGTH_SHORT,
+                ).show()
             }
         }
 
@@ -49,78 +59,118 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        authRepo = AuthRepository(this)
 
-        LogoTapAccessGesture.attach(binding.logoAccessTarget) { openAdminPanel() }
-        binding.btnToggleDetection.setOnClickListener {
-            if (DetectionService.isRunning) stopDetection() else beginDetectionSetup()
-        }
-        binding.btnLogout.setOnClickListener { logout() }
-        loadAccountDetails()
+        OverlayManager.hideOverlay()
+        setupUserInfo()
+        setupClicks()
+        setupAdminAccess()
+        updateButton()
     }
 
     override fun onResume() {
         super.onResume()
-        renderDetectionState()
+        if (!PermissionHelper.hasAllPermissions(this)) {
+            stopDetectionService()
+            OverlayManager.hideOverlay()
+            isDetecting = false
+            updateButton()
+        } else {
+            binding.btnToggleDetection.isEnabled = true
+            isDetecting = DetectionService.isRunning
+            updateButton()
+        }
     }
 
-    private fun loadAccountDetails() {
+    private fun setupUserInfo() {
         lifecycleScope.launch {
-            val user = auth.currentUser()
+            val user = authRepo.currentUser()
             if (user == null) {
-                openLogin()
-            } else {
-                renderAccount(user)
+                goToLogin()
+                return@launch
+            }
+
+            binding.tvUsername.text = user.email.substringBefore("@").ifBlank { "Ultra User" }
+            binding.tvEmail.text = user.email
+            binding.tvStatus.text =
+                if (user.isApproved && user.licenseStatus == "approved") {
+                    "Approved"
+                } else {
+                    "Awaiting administrator approval"
+                }
+            binding.tvPlan.text = if (user.isAdmin) "Administrator" else "Ultra AutoDetector"
+        }
+    }
+
+    private fun setupClicks() {
+        binding.btnToggleDetection.setOnClickListener {
+            when {
+                !PermissionHelper.hasOverlayPermission(this) -> {
+                    showPermissionGuideDialog(isOverlay = true)
+                }
+                !PermissionHelper.hasAccessibilityPermission(this) -> {
+                    showPermissionGuideDialog(isOverlay = false)
+                }
+                else -> toggleDetection()
+            }
+        }
+
+        binding.btnLogout.setOnClickListener {
+            OverlayManager.hideOverlay()
+            stopDetectionService()
+            lifecycleScope.launch {
+                authRepo.logout()
+                goToLogin()
             }
         }
     }
 
-    private fun renderAccount(user: User) {
-        binding.tvUsername.text = user.email.substringBefore("@").ifBlank { "Ultra User" }
-        binding.tvEmail.text = user.email
-        binding.tvPlan.text = if (user.isAdmin) "Administrator" else "Ultra AutoDetector"
-        binding.tvStatus.text = if (user.isAdmin) "Admin access enabled" else auth.remainingLabel(user)
+    private fun setupAdminAccess() {
+        LogoTapAccessGesture.attach(
+            view = binding.logoAccessTarget,
+            onHoldStart = {
+                Toast.makeText(this, "Hold 6 sec for admin...", Toast.LENGTH_SHORT).show()
+            },
+            onTrigger = {
+                vibrateAdminAccess()
+                Toast.makeText(this, "Admin opening...", Toast.LENGTH_SHORT).show()
+                openAdminPanel()
+            },
+        )
     }
 
-    private fun beginDetectionSetup() {
-        when {
-            !PermissionHelper.hasOverlayPermission(this) -> showPermissionDialog(
-                title = "Allow overlay access",
-                message = "ULTRA needs permission to show the PUSH control above other apps.",
-                actionText = "OPEN SETTINGS",
-                onAction = { startActivity(PermissionHelper.overlayIntent(this)) },
-            )
-            !PermissionHelper.hasAccessibilityPermission(this) -> showPermissionDialog(
-                title = "Enable ULTRA accessibility",
-                message = "Accessibility access lets ULTRA perform the configured click and swipe actions.",
-                actionText = "OPEN SETTINGS",
-                onAction = { startActivity(PermissionHelper.accessibilityIntent()) },
-            )
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                !PermissionHelper.hasNotificationPermission(this) -> {
-                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
-            }
-            else -> {
-                val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                projectionLauncher.launch(manager.createScreenCaptureIntent())
-            }
+    private fun toggleDetection() {
+        if (isDetecting) {
+            OverlayManager.hideOverlay()
+            stopDetectionService()
+            isDetecting = false
+            Toast.makeText(this, "Detection stopped", Toast.LENGTH_SHORT).show()
+            updateButton()
+            return
         }
-    }
 
-    private fun showPermissionDialog(
-        title: String,
-        message: String,
-        actionText: String,
-        onAction: () -> Unit,
-    ) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setNegativeButton("NOT NOW", null)
-            .setPositiveButton(actionText) { _, _ -> onAction() }
-            .show()
+        if (!PermissionHelper.hasAllPermissions(this)) {
+            OverlayManager.hideOverlay()
+            showPermissionGuideDialog(
+                isOverlay = !PermissionHelper.hasOverlayPermission(this),
+            )
+            return
+        }
+
+        // MediaProjection is a separate Android consent step. The overlay is
+        // intentionally not shown until this callback returns successfully.
+        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionLauncher.launch(manager.createScreenCaptureIntent())
     }
 
     private fun startDetection(resultCode: Int, data: Intent) {
+        if (!PermissionHelper.hasAllPermissions(this)) {
+            OverlayManager.hideOverlay()
+            isDetecting = false
+            updateButton()
+            return
+        }
+
         val intent = Intent(this, DetectionService::class.java)
             .setAction(DetectionService.ACTION_START)
             .putExtra(DetectionService.EXTRA_RESULT_CODE, resultCode)
@@ -136,40 +186,106 @@ class MainActivity : AppCompatActivity() {
             } else {
                 startService(intent)
             }
+            isDetecting = true
             OverlayManager.showOverlay(this, true)
-            renderDetectionState()
+            updateButton()
+            Toast.makeText(this, "Detection started", Toast.LENGTH_SHORT).show()
         }.onFailure {
-            Toast.makeText(
-                this,
-                "Unable to start detection. Please try again.",
-                Toast.LENGTH_LONG,
-            ).show()
+            OverlayManager.hideOverlay()
+            isDetecting = false
+            updateButton()
+            Toast.makeText(this, "Unable to start detection", Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun stopDetection() {
-        startService(Intent(this, DetectionService::class.java).setAction(DetectionService.ACTION_STOP))
-        OverlayManager.hideOverlay()
-        renderDetectionState()
-    }
-
-    private fun renderDetectionState() {
-        val running = DetectionService.isRunning
-        binding.btnToggleDetection.text = if (running) "STOP DETECTION" else "START DETECTION"
-        binding.btnToggleDetection.setBackgroundResource(
-            if (running) R.drawable.bg_button_stop else R.drawable.bg_button_start,
+    private fun stopDetectionService() {
+        startService(
+            Intent(this, DetectionService::class.java)
+                .setAction(DetectionService.ACTION_STOP),
         )
     }
 
-    private fun logout() {
-        if (DetectionService.isRunning) stopDetection()
-        lifecycleScope.launch {
-            auth.logout()
-            openLogin()
+    private fun updateButton() {
+        binding.btnToggleDetection.text = if (isDetecting) {
+            "STOP DETECTION"
+        } else {
+            "START DETECTION"
+        }
+        binding.btnToggleDetection.setBackgroundResource(
+            if (isDetecting) R.drawable.bg_button_stop else R.drawable.bg_button_start,
+        )
+    }
+
+    private fun showPermissionGuideDialog(isOverlay: Boolean) {
+        // This must happen before the dialog and before the settings activity.
+        OverlayManager.hideOverlay()
+        AlertDialog.Builder(this)
+            .setTitle(
+                if (isOverlay) {
+                    "Overlay Permission Required"
+                } else {
+                    "Accessibility Permission Required"
+                },
+            )
+            .setMessage(
+                if (isOverlay) {
+                    "Allow ULTRA to display over other apps."
+                } else {
+                    "IMPORTANT:\n1. Turn OFF Assistive Ball.\n2. Turn OFF other AutoClickers.\n3. Then enable ULTRA."
+                },
+            )
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("OPEN SETTINGS") { _, _ ->
+                if (isOverlay) {
+                    requestOverlayPermission()
+                } else {
+                    requestAccessibilityPermission()
+                }
+            }
+            .show()
+    }
+
+    private fun requestAccessibilityPermission() {
+        OverlayManager.hideOverlay()
+        Handler(Looper.getMainLooper()).postDelayed(
+            { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+            SETTINGS_DELAY_MS,
+        )
+    }
+
+    private fun requestOverlayPermission() {
+        OverlayManager.hideOverlay()
+        Handler(Looper.getMainLooper()).postDelayed(
+            {
+                startActivityForResult(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:$packageName"),
+                    ),
+                    REQUEST_OVERLAY_PERMISSION,
+                )
+            },
+            SETTINGS_DELAY_MS,
+        )
+    }
+
+    private fun vibrateAdminAccess() {
+        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(
+                VibrationEffect.createOneShot(200L, VibrationEffect.DEFAULT_AMPLITUDE),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(200L)
         }
     }
 
-    private fun openLogin() {
+    private fun openAdminPanel() {
+        startActivity(Intent(this, AdminActivity::class.java))
+    }
+
+    private fun goToLogin() {
         startActivity(
             Intent(this, AuthActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -178,23 +294,8 @@ class MainActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun openAdminPanel() {
-        lifecycleScope.launch {
-            auth.loginAdmin()
-                .onSuccess {
-                    startActivity(Intent(this@MainActivity, AdminActivity::class.java))
-                }
-                .onFailure {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Administrator access is not available for this account.",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
-        }
-    }
-
     companion object {
-        private const val REQUEST_NOTIFICATIONS = 1001
+        private const val SETTINGS_DELAY_MS = 500L
+        private const val REQUEST_OVERLAY_PERMISSION = 1001
     }
 }

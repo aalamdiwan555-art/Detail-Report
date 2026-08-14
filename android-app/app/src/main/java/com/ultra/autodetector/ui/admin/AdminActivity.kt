@@ -22,7 +22,6 @@ import com.ultra.autodetector.data.local.ActionEntity
 import com.ultra.autodetector.data.local.AppDatabase
 import com.ultra.autodetector.data.local.TemplateEntity
 import com.ultra.autodetector.data.local.UserEntity
-import com.ultra.autodetector.data.repository.AuthRepository
 import com.ultra.autodetector.data.repository.TemplateStore
 import com.ultra.autodetector.databinding.ActivityAdminBinding
 import com.ultra.autodetector.ui.logs.LogsActivity
@@ -34,7 +33,6 @@ import java.util.UUID
 
 class AdminActivity : AppCompatActivity() {
     private lateinit var binding: ActivityAdminBinding
-    private val auth by lazy { AuthRepository(this) }
     private val database by lazy { AppDatabase.getInstance(this) }
     private val settings by lazy { getSharedPreferences("detector_settings", MODE_PRIVATE) }
     private val pickImageLauncher =
@@ -74,13 +72,7 @@ class AdminActivity : AppCompatActivity() {
         binding.btnExportLogs.setOnClickListener { exportLauncher.launch("ultra-detection-logs.txt") }
         binding.btnOpenLogs.setOnClickListener { startActivity(Intent(this, LogsActivity::class.java)) }
         binding.btnManageUsers.setOnClickListener { showUserManagement() }
-        lifecycleScope.launch {
-            if (auth.currentUser()?.isAdmin != true) {
-                finish()
-            } else {
-                refreshTemplates()
-            }
-        }
+        refreshTemplates()
     }
 
     private fun updateIntervalLabel() {

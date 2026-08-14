@@ -2,57 +2,49 @@ package com.ultra.autodetector.util
 
 import android.os.Handler
 import android.os.Looper
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
-import android.widget.Toast
 
 object LogoTapAccessGesture {
     private const val HOLD_DURATION_MS = 6_000L
 
-    fun attach(target: View?, onTriggered: () -> Unit) {
-        target ?: return
+    fun attach(
+        view: View?,
+        onHoldStart: () -> Unit,
+        onTrigger: () -> Unit,
+    ) {
+        view ?: return
         val handler = Handler(Looper.getMainLooper())
-        val holdRunnable = Runnable {
-            target.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            Toast.makeText(target.context, "Admin opening...", Toast.LENGTH_SHORT).show()
-            onTriggered()
+        var triggered = false
+        val trigger = Runnable {
+            triggered = true
+            onTrigger()
         }
-        val touchSlop = ViewConfiguration.get(target.context).scaledTouchSlop
-        var downX = 0f
-        var downY = 0f
-        var moved = false
 
-        target.isClickable = true
-        target.isFocusable = true
-        target.setOnTouchListener { view, event ->
+        view.isClickable = true
+        view.isFocusable = true
+        view.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    downX = event.x
-                    downY = event.y
-                    moved = false
-                    handler.postDelayed(holdRunnable, HOLD_DURATION_MS)
-                    Toast.makeText(view.context, "Hold 6 sec for admin", Toast.LENGTH_SHORT).show()
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    moved = moved ||
-                        kotlin.math.abs(event.x - downX) > touchSlop ||
-                        kotlin.math.abs(event.y - downY) > touchSlop
-                    if (moved) handler.removeCallbacks(holdRunnable)
+                    triggered = false
+                    onHoldStart()
+                    handler.postDelayed(trigger, HOLD_DURATION_MS)
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    handler.removeCallbacks(holdRunnable)
+                    handler.removeCallbacks(trigger)
                     true
                 }
+                MotionEvent.ACTION_MOVE -> true
                 else -> true
             }
         }
     }
 
-    // Kept for the imported authentication screen so the base app remains source-compatible.
-    fun attachToHierarchy(target: View?, onTriggered: () -> Unit) =
-        attach(target, onTriggered)
+    // Compatibility overload for any older caller in the imported project.
+    fun attach(view: View?, onTriggered: () -> Unit) =
+        attach(view, onHoldStart = {}, onTrigger = onTriggered)
+
+    fun attachToHierarchy(view: View?, onTriggered: () -> Unit) =
+        attach(view, onHoldStart = {}, onTrigger = onTriggered)
 }
