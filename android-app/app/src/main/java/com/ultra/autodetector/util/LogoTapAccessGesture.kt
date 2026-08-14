@@ -18,31 +18,38 @@ object LogoTapAccessGesture {
     fun attach(target: View, onTriggered: () -> Unit) {
         val handler = Handler(Looper.getMainLooper())
         var triggered = false
+        var holding = false
         var adminRunnable: Runnable? = null
 
         target.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     triggered = false
+                    holding = true
                     adminRunnable?.let(handler::removeCallbacks)
-                    adminRunnable = Runnable {
+                    val runnable = Runnable {
+                        if (!holding || triggered || !view.isShown || !view.isEnabled) return@Runnable
                         triggered = true
                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         Toast.makeText(view.context, "Admin access", Toast.LENGTH_SHORT).show()
                         onTriggered()
                     }
-                    handler.postDelayed(adminRunnable!!, HOLD_DURATION_MS)
+                    adminRunnable = runnable
+                    handler.postDelayed(runnable, HOLD_DURATION_MS)
                     view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(150L).start()
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    holding = false
                     adminRunnable?.let(handler::removeCallbacks)
                     adminRunnable = null
                     view.animate().scaleX(1f).scaleY(1f).setDuration(150L).start()
                     true
                 }
                 else -> {
-                    if (triggered) true else false
+                    // Keep consuming the gesture so ScrollView and other
+                    // parents cannot intercept it during the six-second hold.
+                    holding
                 }
             }
         }
