@@ -14,10 +14,8 @@ object LogoTapAccessGesture {
         target.isClickable = true
         target.isLongClickable = true
         target.isFocusable = true
-
         val handler = Handler(Looper.getMainLooper())
         var runnable: Runnable? = null
-
         target.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
